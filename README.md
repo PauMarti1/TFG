@@ -59,3 +59,23 @@ F1-score Benigne: 0.0000
 F1-score Maligne: 0.4898
 AUC: 0.1567
 
+## Resultats ViT + GNN (Matriu d'adjacència + Features):
+
+Resultats Training:
+Recall Benigne: 0.8117 ± 0.2773
+Recall Maligne: 0.9800 ± 0.0341
+Precision Benigne: 0.8812 ± 0.2109
+Precision Maligne: 0.9539 ± 0.0664
+F1-score Benigne: 0.8406 ± 0.2506
+F1-score Maligne: 0.9664 ± 0.0507
+AUC: 0.9448 ± 0.0986
+
+Resultats Holdout:
+AUC: 0.3817
+Recall Benigne: 0.1200
+Recall Maligne: 0.9167
+Precision Benigne: 0.7500
+Precision Maligne: 0.3333
+F1-score Benigne: 0.2069
+F1-score Maligne: 0.4889
+
