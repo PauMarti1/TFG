@@ -28,4 +28,4 @@
 # Gràfiques del Loss:
 
 ## Vit + GNN (Matriu + Features):
-!(LossVit+GNN.png)
+![](images/LossV+G.png)
