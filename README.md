@@ -27,5 +27,8 @@
 
 # Gràfiques del Loss:
 
+## ViT:
+![No carrega](Images/ViTKFold.png)
+
 ## Vit + GNN (Matriu + Features):
 ![No carrega](Images/LossV+G.png)
