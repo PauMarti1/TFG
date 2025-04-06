@@ -25,3 +25,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GNN (Matriu + Features)| 0.3817 | 0.1200 | 0.9167 | 0.7500 | 0.3333 | 0.2069 | 0.4889 |
 
+# Gràfiques del Loss:
+
+## Vit + GNN (Matriu + Features):
+!(LossVit+GNN.png)
