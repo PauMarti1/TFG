@@ -30,5 +30,8 @@
 ## ViT:
 ![No carrega](Images/ViTKFold.png)
 
+## ViT Preentrenat:
+![No carrega](Images/ViTPreentrenat.png)
+
 ## Vit + GNN (Matriu + Features):
 ![No carrega](Images/LossV+G.png)
