@@ -45,4 +45,4 @@
 ![No carrega](Images/Vit+CNN(Arquitectura).png)
 
 ## Vit + CNN (Features + Lineal):
-![No carrega](Images/Vit+CNN(Lineal).png)
+![No carrega](Images/Vit+CNN(Linear).png)
