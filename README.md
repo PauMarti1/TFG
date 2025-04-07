@@ -1,7 +1,4 @@
 # Resultats
-
-## Resultats Training:
----
 ## Resultats Validació
 
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
@@ -12,7 +9,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GNN (Només matriu) | 0.6631 ± 0.0759 | 0.0186 ± 0.0228 | 0.9873 ± 0.0139 | 0.3000 ± 0.4000 | 0.7867 ± 0.0081 | 0.0348 ± 0.0427 | 0.8757 ± 0.0102 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ViT + GNN (Matriu + Features)| 0.9448 ± 0.0986 | 0.8117 ± 0.2773 | 0.9800 ± 0.0341 | 0.8812 ± 0.2109 | 0.9539 ± 0.0664 | 0.8406 ± 0.2506 | 0.9664 ± 0.0507 |
+| ViT + GNN (Matriu + Features)| 0.9677 ± 0.0647 | 0.8091 ± 0.2594 | 0.9899 ± 0.0203 | 0.9273 ± 0.1455 | 0.9523 ± 0.0634 | 0.8546 ± 0.2203 | 0.9701 ± 0.0428 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + CNN (Features + Arquitectura) 25 epochs | 0.9455 ± 0.0748 | 0.8890 ± 0.1324 | 0.8952 ± 0.1032 | 0.7375 ± 0.1905 | 0.9657 ± 0.0399 | 0.7991 ± 0.1627 | 0.9265 ± 0.0739 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -27,7 +24,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GNN (Només matriu) | 0.1567 | 0.0000 | 1.0000 | 0.0000 | 0.3243 | 0.0000 | 0.4898 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ViT + GNN (Matriu + Features)| 0.3817 | 0.1200 | 0.9167 | 0.7500 | 0.3333 | 0.2069 | 0.4889 |
+| ViT + GNN (Matriu + Features)| 0.4554 | 0.0400 | 0.8462 | 0.3333 | 0.3143 | 0.0714 | 0.4583 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + CNN (Features + Arquitectura)| 0.3538 | 0.2400 | 0.9231 | 0.8571 | 0.3871 | 0.3750 | 0.5455 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -43,6 +40,9 @@
 
 ## Vit + GNN (Matriu + Features):
 ![No carrega](Images/LossV+G.png)
+
+## ViT + CNN (Features + Linear):
+![No carrega](Vit+CNN(Linear).png)
 
 ## Vit + CNN (Features + Arquitectura):
 ![No carrega](Images/Vit+CNN(Arquitectura).png)
