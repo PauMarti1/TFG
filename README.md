@@ -41,9 +41,6 @@
 ## Vit + GNN (Matriu + Features):
 ![No carrega](Images/LossV+G.png)
 
-## ViT + CNN (Features + Linear):
-![No carrega](Vit+CNN(Linear).png)
-
 ## Vit + CNN (Features + Arquitectura):
 ![No carrega](Images/Vit+CNN(Arquitectura).png)
 
