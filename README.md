@@ -39,7 +39,7 @@
 ![No carrega](Images/ViTPreentrenat.png)
 
 ## Vit + GNN (Matriu + Features):
-![No carrega](Images/LossV+G.png)
+![No carrega](Images/ViT+GNN.png)
 
 ## Vit + CNN (Features + Arquitectura):
 ![No carrega](Images/Vit+CNN(Arquitectura).png)
