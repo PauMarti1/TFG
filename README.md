@@ -3,7 +3,7 @@
 
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ViT | 0.9343 ± 0.0523 | 0.8580 ± 0.0730 | 0.8716 ± 0.1031 | 0.6818 ± 0.1498 | 0.9572 ± 0.0222 | 0.7509 ± 0.1153 | 0.9089 ± 0.0685 |
+| ViT 25 epochs | 0.9456 ± 0.0747 | 0.8525 ± 0.1325 | 0.9234 ± 0.0655 | 0.7713 ± 0.1606 | 0.9572 ± 0.0399 | 0.8068 ± 0.1434 | 0.9395 ± 0.0514 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT Preentrenat 100 epochs | 0.7744 ± 0.0446 | 0.8872 ± 0.1489 | 0.5107 ± 0.1082 | 0.3335 ± 0.0488 | 0.9518 ± 0.0442 | 0.4784 ± 0.0611 | 0.6562 ± 0.0744 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -18,7 +18,7 @@
 ## Resultats Holdout
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ViT | 0.2800 | 0.0400 | 0.8333 | 0.3333 | 0.2941 | 0.0714 | 0.4348 |
+| ViT | 0.2646 | 0.0000 | 0.9231 | 0.0000 | 0.3243 | 0.0000 | 0.4800 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT Preentrenat | 0.3231 | 0.4000 | 0.4615 | 0.5882 | 0.2857 | 0.4762 | 0.3529 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -33,7 +33,7 @@
 # Gràfiques del Loss:
 
 ## ViT:
-![No carrega](Images/ViTKFold.png)
+![No carrega](Images/Vit.png)
 
 ## ViT Preentrenat:
 ![No carrega](Images/ViTPreentrenat.png)
