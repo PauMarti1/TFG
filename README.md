@@ -42,4 +42,4 @@
 ![No carrega](Images/ViT+GNN25.png)
 
 ## Vit + CNN (Features + Arquitectura):
-![No carrega](Images/Vit+CNN25.png)
+![No carrega](Images/ViT+CNN25.png)
