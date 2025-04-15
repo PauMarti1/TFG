@@ -33,16 +33,13 @@
 # Gràfiques del Loss:
 
 ## ViT:
-![No carrega](Images/Vit.png)
+![No carrega](Images/ViT25.png)
 
 ## ViT Preentrenat:
-![No carrega](Images/ViTPreentrenat.png)
+![No carrega](Images/ViTPreentrenat25.png)
 
 ## Vit + GNN (Matriu + Features):
-![No carrega](Images/ViT+GNN.png)
+![No carrega](Images/ViT+GNN25.png)
 
 ## Vit + CNN (Features + Arquitectura):
-![No carrega](Images/Vit+CNN(Arquitectura).png)
-
-## Vit + CNN (Features + Lineal):
-![No carrega](Images/Vit+CNN(Linear).png)
+![No carrega](Images/Vit+CNN25.png)
