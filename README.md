@@ -1,6 +1,8 @@
 # Resultats
 ## Resultats Validació
 
+## Ultims Canvis: StratifiedGroupKFold, crossEntropyLoss amb pesos, tot entrenat a 25 epoques, guardat a un arxiu npz totes les caracteristiques demanades.
+
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT 25 epochs | 0.7780 ± 0.0426 | 0.5992 ± 0.1162 | 0.7913 ± 0.0577 | 0.4549 ± 0.0587 | 0.8824 ± 0.0364 | 0.5176 ± 0.0525 | 0.8325 ± 0.0338 |
