@@ -16,6 +16,8 @@
 | ViT + CNN (Features + Arquitectura) 25 epochs | 0.6755 ± 0.0406 | 0.5537 ± 0.1315 | 0.7974 ± 0.1033 | 0.4529 ± 0.0737 | 0.8680 ± 0.0346 | 0.4846 ± 0.0530 | 0.8265 ± 0.0616 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + CNN (Features + Linear) 25 epochs | 0.9077 ± 0.0870 | 0.8207 ± 0.1815 | 0.8487 ± 0.0627 | 0.6022 ± 0.1277 | 0.9456 ± 0.0530 | 0.6913 ± 0.1459 | 0.8936 ± 0.0527 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ViT + GCN (No Binarització) 25 epochs | 0.7720 ± 0.0963 | 0.3347 ± 0.1133 | 0.9082 ± 0.0577 | 0.5536 ± 0.2662 | 0.8304 ± 0.0370 | 0.4076 ± 0.1479 | 0.8669 ± 0.0405 |
 
 ## Resultats Holdout
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
@@ -31,6 +33,8 @@
 | ViT + CNN (Features + Arquitectura) | 0.3200 | 0.1200 | 0.9167 | 0.7500 | 0.3333 | 0.2069 | 0.4889 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + CNN (Features + Linear) | 0.3377 | 0.1905 | 0.9091 | 0.8000 | 0.3704 | 0.3077 | 0.5263 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ViT + GCN (No Binarització) | 0.4050 | 0.0400 | 0.8333 | 0.3333 | 0.2941 | 0.0714 | 0.4348 |
 
 # Gràfiques del Loss:
 
@@ -45,3 +49,6 @@
 
 ## Vit + CNN (Features + Arquitectura):
 ![No carrega](Images/ViT+CNN25.png)
+
+## Vit + GCN (NoBin):
+![No carrega](Images/ViT+GCN.png)
