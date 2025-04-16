@@ -1,7 +1,7 @@
 # Resultats
 ## Resultats Validació
 
-## Ultims Canvis: StratifiedGroupKFold, crossEntropyLoss amb pesos, tot entrenat a 25 epoques, guardat a un arxiu npz totes les caracteristiques demanades.
+## Ultims Canvis: StratifiedGroupKFold, crossEntropyLoss amb pesos, tot entrenat a 25 epoques, guardat a un arxiu npz totes les caracteristiques demanades, sense KNN.
 
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -20,6 +20,8 @@
 | ViT + GCN (No Binarització) 25 epochs | 0.7720 ± 0.0963 | 0.3347 ± 0.1133 | 0.9082 ± 0.0577 | 0.5536 ± 0.2662 | 0.8304 ± 0.0370 | 0.4076 ± 0.1479 | 0.8669 ± 0.0405 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GCN (Binarització) 25 epochs | 0.7442 ± 0.1025 | 0.3134 ± 0.1263 | 0.9045 ± 0.0659 | 0.5353 ± 0.2922 | 0.8245 ± 0.0451 | 0.3848 ± 0.1686 | 0.8618 ± 0.0478 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ResNet 25 epochs | 0.7029 ± 0.0818 | 0.4671 ± 0.2493 | 0.8014 ± 0.0974 | 0.4106 ± 0.0770 | 0.8526 ± 0.0439 | 0.3959 ± 0.1503 | 0.8216 ± 0.0425 |
 
 ## Resultats Holdout
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
@@ -39,6 +41,8 @@
 | ViT + GCN (No Binarització) | 0.4050 | 0.0400 | 0.8333 | 0.3333 | 0.2941 | 0.0714 | 0.4348 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GCN (Binarització) | 0.4083 | 0.0400 | 0.9167 | 0.5000 | 0.3143 | 0.0741 | 0.4681 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ResNet | 0.8967 | 0.5200 | 0.9167 | 0.9286 | 0.4783 | 0.6667 | 0.6286 |
 
 # Gràfiques del Loss:
 
@@ -59,3 +63,6 @@
 
 ## Vit + GCN (Bin):
 ![No carrega](Images/ViT+GCNBIN.png)
+
+## ResNet:
+![No carrega](Images/ResNet_MLP_Loss.png)
