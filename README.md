@@ -1,7 +1,7 @@
 # Resultats
 ## Resultats Validació
 
-## Ultims Canvis: StratifiedGroupKFold, crossEntropyLoss amb pesos, tot entrenat a 25 epoques, guardat a un arxiu npz totes les caracteristiques demanades, sense KNN.
+## Ultims Canvis: Agregacions i MaxVoting, a més de totes les correccions que vam parlar a la trucada.
 
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -86,5 +86,5 @@
 ## Vit + GCN (Agg):
 ![No carrega](Images/GCNAGG.png)
 
-## Vit + GCN (Agg):
+## Vit + GAT (Agg):
 ![No carrega](Images/GATAGG.png)
