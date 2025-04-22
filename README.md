@@ -27,6 +27,8 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GCN (Agregació) 25 epochs | 0.7616 ± 0.0739 | 0.3173 ± 0.1043 | 0.9059 ± 0.0608 | 0.5458 ± 0.2386 | 0.8259 ± 0.0408 | 0.3777 ± 0.0925 | 0.8623 ± 0.0330 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| ViT + GAT (Agregació) 25 epochs | 0.7202 ± 0.1015 | 0.3180 ± 0.1228 | 0.8999 ± 0.0428 | 0.4737 ± 0.1691 | 0.8238 ± 0.0518 | 0.3753 ± 0.1371 | 0.8596 ± 0.0429 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Resultats Holdout
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
@@ -52,6 +54,8 @@
 | DenseNet | 0.5000 | 0.0000 | 1.0000 | 0.0000 | 0.3243 | 0.0000 | 0.4898 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GCN (Agregació) | 0.4100 | 0.0000 | 0.9167 | 0.0000 | 0.3056 | 0.0000 | 0.4583 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ViT + GAT (Agregació) | 0.2500 | 0.0000 | 0.8333 | 0.0000 | 0.2857 | 0.0000 | 0.4255 |
 
 # Gràfiques del Loss:
 
@@ -81,3 +85,6 @@
 
 ## Vit + GCN (Agg):
 ![No carrega](Images/GCNAGG.png)
+
+## Vit + GCN (Agg):
+![No carrega](Images/GATAGG.png)
