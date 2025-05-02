@@ -74,8 +74,11 @@
 ## ViT Preentrenat:
 ![No carrega](Images/ViTPreentrenat25.png)
 
-## Vit + GNN (Matriu + Features):
-![No carrega](Images/ViT+GNN25.png)
+## Vit + GAT (TRAIN):
+![No carrega](Images/train_loss_per_fold_ViTGAT.png)
+
+## Vit + GAT (VALIDACIO):
+![No carrega](Images/val_loss_per_fold_ViTGAT.png)
 
 ## Vit + CNN (Features + Arquitectura):
 ![No carrega](Images/ViT+CNN25.png)
