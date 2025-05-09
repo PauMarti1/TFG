@@ -1,3 +1,35 @@
+# Descripció fitxers:
+
+A tots els entrenos que fan ús de Graph Neural Networks he fet servir features i edge attributes:
+
+Images: Graelles de loss de tots els entrenos que he anat fent
+
+Attention_triplets: Triplets on es mostra la imatge original, on posa l’atenció el ViT i on posa l’atenció el GAT.
+
+DenseNet.py: KFold i Holdout de una Densenet
+
+EnsembleGAT.py: Extreure les 12 matrius d’atenció del ViT, entrenar un GAT amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
+
+GATAGG.py: Agafar les 12 matrius d’atenció del ViT, passar-les a una capa d’agregació i fer-les servir per entrenar el model GAT.
+
+GCNAgg.py: Agafar les 12 matrius d’atenció del ViT, passar-les a una capa d’agregació i fer-les servir per entrenar el model GCN.
+
+MatAdj+Features.py: Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GAT.
+
+ResNet.py: KFold i Holdout de una Resnet.
+
+ViT+CNN (Lineal).py: Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar una capa Linear.
+
+ViT+CNNArc.py: Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar la arquitectura CNN que em vas passar per mail.
+
+ViT+GCN.py: Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GCN.
+
+ViTKFold.py: KFold i Holdout de un ViT tal cual el dona la llibreria.
+
+ViTPreentrenat.py: KFold i Holdout de un ViT amb els pesos d’un ViT suposadament entrenat en histopatologia.
+
+heatmaps.py: Procés de creació dels mapes de calor per visualitzar la atenció de cada model.
+
 # Resultats
 ## Resultats Validació
 
