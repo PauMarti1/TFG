@@ -64,6 +64,8 @@ heatmaps.py: Procés de creació dels mapes de calor per visualitzar la atenció
 | ViT + GAT (Ensenmble) 25 epochs | 0.7488 ± 0.0972 | 0.2718 ± 0.1141 | 0.9350 ± 0.0413 | 0.5615 ± 0.2447 | 0.8207 ± 0.0450 | 0.3585 ± 0.1476 | 0.8735 ± 0.0372 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GCN (Ensemble) 25 epochs | 0.7495 ± 0.0994 | 0.3011 ± 0.1220 | 0.9145 ± 0.0533 | 0.5308 ± 0.2650 | 0.8241 ± 0.0405 | 0.3777 ± 0.1634 | 0.8663 ± 0.0402 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| CNN 3 Conv2d 50 epochs | 0.5727 ± 0.0573 | 0.3140 ± 0.1023 | 0.7489 ± 0.0409 | 0.2290 ± 0.0582 | 0.7915 ± 0.0424 | 0.2393 ± 0.0664 | 0.7481 ± 0.0184 |
 
 ## Resultats Holdout
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
@@ -97,6 +99,8 @@ heatmaps.py: Procés de creació dels mapes de calor per visualitzar la atenció
 | ViT + GAT (Ensemble) | 0.4333 | 0.0000 | 0.9167 | 0.0000 | 0.3056 | 0.0000 | 0.4583 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GCN (Ensemble) | 0.4083 | 0.0800 | 0.8333 | 0.5000 | 0.3030 | 0.1379 | 0.4444 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| CNN 3 Conv2d | 0.3767 | 0.2000 | 0.8333 | 0.7143 | 0.3333 | 0.3125 | 0.4762 |
 
 # Gràfiques del Loss:
 
@@ -141,3 +145,6 @@ heatmaps.py: Procés de creació dels mapes de calor per visualitzar la atenció
 
 ## Vit + GCN (Ensemble):
 ![No carrega](Images/GCNENSEMBLE.png)
+
+## CNN Conv2d:
+![No carrega](Images/CNN_Loss_per_fold.png)
