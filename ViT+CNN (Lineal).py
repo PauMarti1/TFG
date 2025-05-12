@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 from torch_geometric.data import Data
 from sklearn.neighbors import kneighbors_graph
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data import DataLoader
 from collections import Counter
 from tqdm import tqdm
@@ -23,119 +23,20 @@ from transformers import ViTModel, ViTFeatureExtractor
 from torch.utils.data import Dataset, DataLoader
 
 
-# -----------------------
-# CONFIGURACIONS I CARREGADA DE DADES ORIGINALS
-DataDir = r'/fhome/pmarti/TFGPau/tissue_images'
-os.chdir(DataDir)
+data = np.load('tissueDades.npz', allow_pickle=True)
 
-# Carregar imatges i mÃ scares
-files = glob.glob('*_mask.png')
-files = np.array(files)
-files = files[np.array([file.find('Manresa') for file in files]) == -1]
-Centers = ['Terrassa', 'Alicante', 'Manresa', 'Basurto', 'Bellvitge']
-filesCenter = {}
-for Center in Centers:
-    filesCenter[Center] = np.array([file.find(Center) for file in files]) == -1
+# Variables
+X_no_hosp = data['X_no_hosp']
+y_no_hosp = data['y_no_hosp']
+PatID_no_hosp = data['PatID_no_hosp']
+coords_no_hosp = data['coords_no_hosp']
+infil_no_hosp = data['infil_no_hosp']
 
-PatID = []
-ims = []
-masks = []
-fileID = []
-CenterID = []
-for k in np.arange(len(files)):
-    file = files[k]
-    im = cv.imread(file.split('_mask')[0] + '.png')[:, :, 0:3]
-    if min(im.shape[0:2]) >= 128:
-        ims.append(im)
-        im_mask = np.mean(cv.imread(file)[:, :, 0:3], axis=2) / 255
-        masks.append(im_mask)
-        PatID.append(file.split('_SampID')[0])
-        fileID.append(file.split('_mask')[0])
-        CenterID.append(file.split('_')[0])
-
-# Preprocessament de les mÃ scares: 2 -> infiltraciÃ³ (maligne), 1 -> teixit (benigne), 0 -> fons
-for k in np.arange(len(masks)):
-    bck = masks[k] > 0
-    masks[k][np.nonzero(masks[k] == 1)] = 2
-    masks[k][np.nonzero(masks[k] != 2)] = 1
-    masks[k] = masks[k] * bck.astype(int)
-
-def ImPatches(im, sze, stride):
-    szex, szey = sze
-    im_patch = [im[x:x+szex, y:y+szey] 
-                for x in range(0, im.shape[0], stride) 
-                for y in range(0, im.shape[1], stride)]
-    valid_patch = []
-    for patch in im_patch:
-        if min(patch.shape[0:2]) >= min(sze):
-            valid_patch.append(patch)
-    if len(valid_patch) > 0:       
-        im_patch = np.stack(valid_patch)
-    return im_patch
-
-sze = [224, 224]
-stride = 224
-im_patches = []
-PatID_patches = []
-fileID_patches = []
-tissue = []
-patho = []
-CenterID_patches = []
-
-for k in np.arange(len(masks)):
-    im = masks[k]
-    if min(im.shape) > sze[0]:
-        patches = ImPatches(im, sze, stride)
-        pathotissue_patch = np.sum(patches.reshape(patches.shape[0], np.prod(sze)) == 2, axis=1)
-        tissue_patch = np.sum(patches.reshape(patches.shape[0], np.prod(sze)) > 0, axis=1)
-        tissue.append(tissue_patch)
-        patho.append(pathotissue_patch)
-        im_img = ims[k]
-        patches = ImPatches(im_img, sze, stride)
-        im_patches.append(patches)
-        PatID_patches.append(np.repeat(PatID[k], patches.shape[0]))
-        fileID_patches.append(np.repeat(fileID[k], patches.shape[0]))
-        CenterID_patches.append(np.repeat(CenterID[k], patches.shape[0]))
-
-im_patches = np.concatenate(im_patches, axis=0)
-tissue = np.concatenate(tissue, axis=0)
-patho = np.concatenate(patho, axis=0)
-PatID_patches = np.concatenate(PatID_patches, axis=0)
-CenterID_patches = np.concatenate(CenterID_patches, axis=0)
-fileID_patches = np.concatenate(fileID_patches, axis=0)
-
-th_percen_tissue = 0.75
-id_tissue = np.nonzero(tissue / np.prod(sze) > th_percen_tissue)[0]
-
-y_true = patho[id_tissue] / tissue[id_tissue]
-idxpatho = np.nonzero(y_true == 1)[0]
-idxother = np.nonzero(y_true < 1)[0]
-idxsel = np.concatenate((idxpatho[0::5], idxother))
-shuffle(idxsel)
-y_true = y_true[idxsel]
-y_true = (y_true > 0.5).astype(int)
-
-X = im_patches[id_tissue, :]
-CenterID_patches = CenterID_patches[id_tissue]
-X = X[idxsel, :]
-CenterID_patches = CenterID_patches[idxsel]
-
-X = X.astype(float)
-mu = [np.mean(X[:, :, :, ch].flatten()) for ch in range(3)]
-std = [np.std(X[:, :, :, ch].flatten()) for ch in range(3)]
-for kch in range(3):
-    X[:, :, :, kch] = (X[:, :, :, kch] - mu[kch]) / std[kch]
-
-def split_test_hospital(X, y_true, CenterID_patches):
-    hospital_counts = Counter(CenterID_patches)
-    least_common_hospital = hospital_counts.most_common()[-1][0]
-    test_idx = np.where(CenterID_patches == least_common_hospital)[0]
-    train_idx = np.where(CenterID_patches != least_common_hospital)[0]
-    X_train, y_train = X[train_idx], y_true[train_idx]
-    X_test, y_test = X[test_idx], y_true[test_idx]
-    return X_train, y_train, X_test, y_test, least_common_hospital
-
-X_no_hosp, y_no_hosp, X_hosp, y_hosp, least = split_test_hospital(X, y_true, CenterID_patches)
+X_hosp = data['X_hosp']
+y_hosp = data['y_hosp']
+PatID_hosp = data['PatID_hosp']
+coords_hosp = data['coords_hosp']
+infil_hosp = data['infil_hosp']
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -224,12 +125,13 @@ def train_model(train_loader, val_loader, metrics,model ,epochs=25):
 
 # 6. Stratified K-Fold Cross-Validation
 n_splits = 5
-skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42)
+
 
 metrics = {"recall_0": [], "recall_1": [], "precision_0": [], "precision_1": [], "f1_0": [], "f1_1": [], "auc": []}
 all_loss = []
 model = Classifier().to(device)
-for fold, (train_idx, val_idx) in enumerate(skf.split(X_no_hosp, y_no_hosp)):
+for fold, (train_idx, val_idx) in enumerate(sgkf.split(X_no_hosp, y_no_hosp, groups=PatID_no_hosp)):
     print(f"\n=== Fold {fold + 1} ===")
     X_train_fold = [X_no_hosp[i] for i in train_idx]
     y_train_fold = y_no_hosp[train_idx]
