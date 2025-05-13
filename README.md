@@ -10,21 +10,21 @@ Attention_triplets: Triplets on es mostra la imatge original, on posa l’atenci
 
 DenseNet.py (DenseNet 25 epochs): KFold i Holdout de una Densenet
 
-EnsembleGAT.py (ViT + GAT (Ensenmble) 25 epochs): Extreure les 12 matrius d’atenció del ViT, entrenar un GAT amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
+EnsembleGAT.py (ViT + GAT (Ensemble) 25 epochs): Extreure les 12 matrius d’atenció del ViT, entrenar un GAT amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
 
-EnsembleGCN.py (ViT + GCN (Ensenmble) 25 epochs): Extreure les 12 matrius d’atenció del ViT, entrenar un GCN amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
+EnsembleGCN.py (ViT + GCN (Ensemble) 25 epochs): Extreure les 12 matrius d’atenció del ViT, entrenar un GCN amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
 
 GATAGG.py (ViT + GAT (Agregació) 25 epochs): Agafar les 12 matrius d’atenció del ViT, passar-les a una capa d’agregació i fer-les servir per entrenar el model GAT.
 
 GCNAgg.py (ViT + GCN (Agregació) 25 epochs): Agafar les 12 matrius d’atenció del ViT, passar-les a una capa d’agregació i fer-les servir per entrenar el model GCN.
 
-MatAdj+Features.py (ViT + GAT (Matriu + Features) 25 epochs): Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GAT.
+MatAdj+Features.py (ViT + GAT (Mitjana) 25 epochs): Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GAT.
 
 ResNet.py (ResNet 25 epochs): KFold i Holdout de una Resnet.
 
-ViT+CNN (Lineal).py (ViT + CNN (Features + Linear) 25 epochs): Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar una capa Linear.
+ViT+CNN (Lineal).py (ViT + CNN (Linear) 25 epochs): Agafar el vector de característiques del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar una capa Linear.
 
-ViT+CNNArc.py (ViT + CNN (Features + Arquitectura) 25 epochs): Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar la arquitectura CNN que em vas passar per mail.
+ViT+CNNArc.py (ViT + CNN (Arquitectura) 25 epochs): Agafar el vector de característiques del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar la arquitectura CNN que em vas passar per mail.
 
 ViT+GCN.py (ViT + GCN (Binarització) 25 epochs i ViT + GCN (No Binarització) 25 epochs): Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GCN.
 
@@ -47,15 +47,15 @@ CNN.py (CNN 3 Conv2d 50 epochs): Entreno validació i holdout utilitzant una cnn
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + GAT (Només matriu) | 0.6631 ± 0.0759 | 0.0186 ± 0.0228 | 0.9873 ± 0.0139 | 0.3000 ± 0.4000 | 0.7867 ± 0.0081 | 0.0348 ± 0.0427 | 0.8757 ± 0.0102 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ViT + GAT (Matriu + Features) 25 epochs | 0.7558 ± 0.1070 | 0.3850 ± 0.2367 | 0.8767 ± 0.0537 | 0.4480 ± 0.1726 | 0.8369 ± 0.0671 | 0.4057 ± 0.2046 | 0.8555 ± 0.0550 |
+| ViT + GAT (Mitjana) 25 epochs | 0.7558 ± 0.1070 | 0.3850 ± 0.2367 | 0.8767 ± 0.0537 | 0.4480 ± 0.1726 | 0.8369 ± 0.0671 | 0.4057 ± 0.2046 | 0.8555 ± 0.0550 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + CNN (Features + Arquitectura) 25 epochs | 0.6755 ± 0.0406 | 0.5537 ± 0.1315 | 0.7974 ± 0.1033 | 0.4529 ± 0.0737 | 0.8680 ± 0.0346 | 0.4846 ± 0.0530 | 0.8265 ± 0.0616 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ViT + CNN (Features + Linear) 25 epochs | 0.9077 ± 0.0870 | 0.8207 ± 0.1815 | 0.8487 ± 0.0627 | 0.6022 ± 0.1277 | 0.9456 ± 0.0530 | 0.6913 ± 0.1459 | 0.8936 ± 0.0527 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ViT + GCN (No Binarització) 25 epochs | 0.7720 ± 0.0963 | 0.3347 ± 0.1133 | 0.9082 ± 0.0577 | 0.5536 ± 0.2662 | 0.8304 ± 0.0370 | 0.4076 ± 0.1479 | 0.8669 ± 0.0405 |
+| ViT + GCN (Mitjana No Binarització) 25 epochs | 0.7720 ± 0.0963 | 0.3347 ± 0.1133 | 0.9082 ± 0.0577 | 0.5536 ± 0.2662 | 0.8304 ± 0.0370 | 0.4076 ± 0.1479 | 0.8669 ± 0.0405 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ViT + GCN (Binarització) 25 epochs | 0.7442 ± 0.1025 | 0.3134 ± 0.1263 | 0.9045 ± 0.0659 | 0.5353 ± 0.2922 | 0.8245 ± 0.0451 | 0.3848 ± 0.1686 | 0.8618 ± 0.0478 |
+| ViT + GCN (Mitjana Binarització) 25 epochs | 0.7442 ± 0.1025 | 0.3134 ± 0.1263 | 0.9045 ± 0.0659 | 0.5353 ± 0.2922 | 0.8245 ± 0.0451 | 0.3848 ± 0.1686 | 0.8618 ± 0.0478 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Arquitectura | AUC | Recall Benigne | Recall Maligne | Precision Benigne | Precision Maligne | F1-Score Benigne | F1-Score Maligne |
 | --- | --- | --- | --- | --- | --- | --- | --- |
