@@ -8,67 +8,56 @@ from torch_geometric.data import Data, Batch
 from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score
+from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score, roc_curve, auc
 from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 import matplotlib.pyplot as plt
 
-# -----------------------
-# CONFIGURATION AND DATA LOADING
-data = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
-X_no_hosp = data['X_no_hosp']; y_no_hosp = data['y_no_hosp']; PatID_no_hosp = data['PatID_no_hosp']
-X_hosp    = data['X_hosp'];    y_hosp    = data['y_hosp']
+data = np.load('/fhome/pmarti/TFGPau/processedIms.npz', allow_pickle=True)
+data1 = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
 
-# ================= STEP 1: Load ViT model =================
-deit = ViTModel.from_pretrained("google/vit-base-patch16-224").eval()
-processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224")
+f_no = data['features_list_single_no_h'] 
+a_no = data['adj_list_single_no_h']
 
-# -----------------------
-# STEP 2: Process images: extract features, raw attention tensors
+f_h = data['features_list_single_h'] 
+a_h = data['adj_list_single_h']
 
-def process_images(image_list):
-    feats, attn_list = [], []
-    for img in tqdm(image_list, desc="Processing images"):
-        if isinstance(img, np.ndarray): img = Image.fromarray((img*255).astype(np.uint8))
-        else: img = Image.open(img).convert("RGB")
-        inputs = processor(img, return_tensors="pt")
-        with torch.no_grad():
-            out = deit(**inputs, output_attentions=True)
-            feat = out.last_hidden_state.squeeze(0)[1:]  # drop CLS => (196,768)
-            layers = [att.mean(dim=1).squeeze(0)[1:,1:] for att in out.attentions]
-            attn = torch.stack(layers)  # (12,196,196)
-        feats.append(feat)
-        attn_list.append(attn)
-    return feats, attn_list
-
-f_no, a_no = process_images(X_no_hosp)
-f_h,  a_h  = process_images(X_hosp)
+y_hosp = data1['y_hosp']
+y_no_hosp = data1['y_no_hosp']
 
 def collate_fn(batch): return Batch.from_data_list(batch)
 
 # ================= STEP 3: Model definition with aggregation + pooling + edge weights =================
 class GATWithPool(torch.nn.Module):
-    def __init__(self, in_ch, hidden_ch, out_ch, heads=4, threshold=0.0):
-        super().__init__()
-        self.agg = torch.nn.Conv2d(12, 1, kernel_size=1)
-        self.gat1 = GATConv(in_ch, hidden_ch, heads=heads, concat=True, edge_dim=1)
-        self.gat2 = GATConv(hidden_ch*heads, hidden_ch, heads=1, concat=True, edge_dim=1)
-        self.lin  = torch.nn.Linear(hidden_ch, out_ch)
+    def __init__(self, in_channels, hidden_dim, out_channels, heads=1, threshold=0.0):
+        super(GATWithPool, self).__init__()
+        
+        # Agregació aprenent de les 12 matrius d’atenció → 1 matriu
+        self.attn_agg = torch.nn.Conv2d(12, 1, kernel_size=1)
+
+        # Mateixes capes GAT que al teu model original
+        self.gat1 = GATConv(in_channels, hidden_dim, heads=heads, concat=True, edge_dim=1)
+        self.gat2 = GATConv(hidden_dim * heads, hidden_dim, heads=1, concat=True, edge_dim=1)
+        self.fc   = torch.nn.Linear(hidden_dim, out_channels)
+
         self.threshold = threshold
 
-    def forward(self, x, attn_tensor, batch_idx):
-        # aggregate attention
-        agg_mat = self.agg(attn_tensor.unsqueeze(0)).squeeze(0).squeeze(0)  # (196,196)
-        # build edge_index and edge_attr based on threshold
+    def forward(self, data, attn_tensor):
+        x, batch_idx = data.x, data.batch
+
+        agg_mat = self.attn_agg(attn_tensor.unsqueeze(0)).squeeze(0).squeeze(0)
+
         mask = agg_mat > self.threshold
         edge_index = mask.nonzero(as_tuple=False).t().contiguous()
-        edge_attr  = agg_mat[mask]  # weights for each edge
-        # graph conv
-        x = F.elu(self.gat1(x, edge_index))
-        x = F.elu(self.gat2(x, edge_index))
-        # global pooling
-        g = global_mean_pool(x, batch_idx)
-        return self.lin(g), edge_attr
+        edge_attr  = agg_mat[mask]
+
+        x = self.gat1(x, edge_index, edge_attr)
+        x = F.relu(x)
+        x = self.gat2(x, edge_index, edge_attr)
+
+        x = global_mean_pool(x, batch_idx)
+
+        return F.log_softmax(self.fc(x), dim=1)  # sortida amb 2 classes
 
 # ================= STEP 4: Training & Validation =================
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -81,6 +70,7 @@ metrics = {k:[] for k in ['recall_0','recall_1','precision_0','precision_1','f1_
 all_loss = []
 best_auc, best_state = 0, None
 val_loss_per_fold = []
+roc_data_per_fold = []
 
 for fold, (tr, va) in enumerate(skf.split(f_no, y_no_hosp, PatID_no_hosp),1):
     print(f"\n--- Fold {fold} ---")
@@ -100,7 +90,7 @@ for fold, (tr, va) in enumerate(skf.split(f_no, y_no_hosp, PatID_no_hosp),1):
         for b in tl:
             b = b.to(device)
             opt.zero_grad()
-            logits, _ = model(b.x, b.attn.to(device), b.batch)
+            logits = model(b, b.attn.to(device))
             loss = loss_fn(logits, b.y)
             loss.backward(); opt.step()
             losses.append(loss.item())
@@ -123,6 +113,11 @@ for fold, (tr, va) in enumerate(skf.split(f_no, y_no_hosp, PatID_no_hosp),1):
             y_true.append(b.y.item())
             y_pred.append(probs.argmax(dim=1).item())
             y_scores.append(probs[0,1].item())
+
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    roc_auc = auc(fpr, tpr)
+    roc_data_per_fold.append((fpr, tpr, roc_auc))
+
     val_auc = roc_auc_score(y_true, y_scores)
     val_loss_per_fold.append(np.mean(v_loss))
     print(f"Fold {fold} AUC: {val_auc:.4f}")
@@ -160,6 +155,21 @@ with torch.no_grad():
         yt.append(b.y.item())
         yp.append(probs.argmax(dim=1).item())
         ys.append(probs[0,1].item())
+
+fpr_test, tpr_test, _ = roc_curve(yt, ys)
+roc_auc_test = auc(fpr_test, tpr_test)
+
+plt.figure(figsize=(8, 6))
+plt.plot(fpr_test, tpr_test, label=f"Holdout ROC (AUC = {roc_auc_test:.2f})", color="darkorange")
+plt.plot([0, 1], [0, 1], 'k--', label='Random')
+plt.title("ROC Curve - Holdout Set")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("/fhome/pmarti/TFGPau/RocCurves/ViTGAT_Agregació_ROC_Holdout.png", dpi=300)
+plt.close()
 # final holdout metrics
 print("\nHoldout results:")
 print(f"AUC: {roc_auc_score(yt, ys):.4f}")
@@ -183,19 +193,27 @@ plt.tight_layout()
 plt.savefig('/fhome/pmarti/TFGPau/GATAGG_loss(Entreno).png', dpi=300)
 plt.close()
 
-# Validation loss únic per fold (punt)
+plt.figure(figsize=(10, 6))
+for i, (fpr, tpr, roc_auc) in enumerate(roc_data_per_fold):
+    plt.plot(fpr, tpr, label=f"Fold {i+1} (AUC = {roc_auc:.2f})")
+plt.plot([0, 1], [0, 1], 'k--', label='Random')
+plt.title("ROC Curves per Fold - ResNet+MLP")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("/fhome/pmarti/TFGPau/RocCurves/ViTGAT_Agregació_ROC_PerFold.png", dpi=300)
+plt.close()
+
 plt.figure(figsize=(6, 4))
 
-# 1) amb línia
 plt.plot(
     range(1, len(val_loss_per_fold) + 1),   # X = folds 1,2,3…
     val_loss_per_fold,                      # Y = les losses
     'o-',                                   # punts amb línia
     label='Val Loss per Fold'
 )
-
-# 2) (opcional) o bé si vols un punt per fold sense línia:
-# plt.scatter(range(1, len(val_loss_per_fold) + 1), val_loss_per_fold)
 
 plt.xlabel('Fold')
 plt.ylabel('Val Loss')
