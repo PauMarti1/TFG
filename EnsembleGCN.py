@@ -17,46 +17,17 @@ from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 import matplotlib.pyplot as plt
 
-# -----------------------
-# CONFIGURACIONS I CARREGADA DE DADES ORIGINALS
-data = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
+data = np.load('/fhome/pmarti/TFGPau/processedIms.npz', allow_pickle=True)
+data1 = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
 
-X_no_hosp = data['X_no_hosp']
-y_no_hosp = data['y_no_hosp']
-PatID_no_hosp = data['PatID_no_hosp']
-coords_no_hosp = data['coords_no_hosp']
-infil_no_hosp = data['infil_no_hosp']
+features_list = data['features_list_ensemble_no_h']
+attn_list = data['adj_list_ensemble_no_h']
 
-X_hosp = data['X_hosp']
-y_hosp = data['y_hosp']
-PatID_hosp = data['PatID_hosp']
-coords_hosp = data['coords_hosp']
-infil_hosp = data['infil_hosp']
+features_list_h = data['features_list_ensemble_h']
+attn_list_h = data['adj_list_ensemble_h']
 
-deit = ViTModel.from_pretrained("google/vit-base-patch16-224").eval()
-processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224")
-
-def process_images(image_list):
-    features_list, attn_list = [], []
-    for image in tqdm(image_list, desc="Processing images"):
-        if isinstance(image, np.ndarray):
-            image = Image.fromarray((image * 255).astype(np.uint8))
-        else:
-            image = Image.open(image).convert("RGB")
-
-        inputs = processor(image, return_tensors="pt")
-        with torch.no_grad():
-            outputs = deit(**inputs, output_attentions=True)
-            features = outputs.last_hidden_state.squeeze(0)
-            per_layer = [att.mean(dim=1).squeeze(0) for att in outputs.attentions]
-            attn_tensor = torch.stack(per_layer)
-
-        features_list.append(features)
-        attn_list.append(attn_tensor)
-
-    return features_list, attn_list
-
-features_list, attn_list = process_images(X_no_hosp)
+y_hosp = data1['y_hosp']
+y_no_hosp = data1['y_no_hosp']
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -68,7 +39,8 @@ class GCNGraphClassifier(torch.nn.Module):
         self.conv2 = GCNConv(hidden_channels, out_channels)
 
     def forward(self, x, edge_index):
-        x = F.relu(self.conv1(x, edge_index))
+        x = self.conv1(x, edge_index)
+        x = F.relu(x)
         x = self.conv2(x, edge_index)
         return x
 
@@ -203,8 +175,6 @@ models = [GCNGraphClassifier(768, 256, 2).to(device) for _ in range(12)]
 for i, model in enumerate(models):
     model.load_state_dict(best_model_states[i])
     model.eval()
-
-features_list_h, attn_list_h = process_images(X_hosp)
 
 y_true, y_pred, y_scores = [], [], []
 for i in range(len(X_hosp)):
