@@ -13,68 +13,27 @@ from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data import DataLoader
 from collections import Counter
 from tqdm import tqdm
-from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score, confusion_matrix, accuracy_score
+from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score, confusion_matrix, accuracy_score, roc_curve, auc
 from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 from torch_geometric.data import Batch
 import matplotlib.pyplot as plt
 
 
-# -----------------------
-# CONFIGURACIONS I CARREGADA DE DADES ORIGINALS
-# Carregar el fitxer .npz
-data = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
+data = np.load('/fhome/pmarti/TFGPau/processedIms.npz', allow_pickle=True)
+data1 = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
 
-# Assignar les variables
-X_no_hosp = data['X_no_hosp']
-y_no_hosp = data['y_no_hosp']
-PatID_no_hosp = data['PatID_no_hosp']
-coords_no_hosp = data['coords_no_hosp']
-infil_no_hosp = data['infil_no_hosp']
+features_list = data['features_list_single_no_h'] 
+adj_list = data['adj_list_single_no_h']
 
-X_hosp = data['X_hosp']
-y_hosp = data['y_hosp']
-PatID_hosp = data['PatID_hosp']
-coords_hosp = data['coords_hosp']
-infil_hosp = data['infil_hosp']
+features_list_h = data['features_list_single_h'] 
+adj_list_h = data['adj_list_single_h']
 
-# ================= STEP 1: Load ViT (DeiT) model =================
-deit = ViTModel.from_pretrained("google/vit-base-patch16-224").eval()
-processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224")
-
-# Function to process dataset
-def process_images(image_list):
-    features_list, adj_list = [], []
-    for image in tqdm(image_list, desc="Processing images"):
-        if isinstance(image, np.ndarray):
-            image = Image.fromarray((image * 255).astype(np.uint8))
-        else:
-            image = Image.open(image).convert("RGB")
-        
-        inputs = processor(image, return_tensors="pt")
-        
-        with torch.no_grad():
-            outputs = deit(**inputs, output_attentions=True)
-            features = outputs.last_hidden_state.squeeze(0)  # Shape: (197, 768)
-            attentions = torch.stack(outputs.attentions).mean(dim=0).squeeze(0)  # Shape: (12, 197, 197)
-        
-        attn_matrix = attentions.mean(dim=0).cpu().numpy()
-
-        # Binaritzar matriu
-        threshold = np.percentile(attn_matrix, 90)
-        binary_adj = (attn_matrix >= threshold).astype(int)
-
-        edge_index = torch.tensor(np.array(np.nonzero(attn_matrix)), dtype=torch.long)
-        
-        features_list.append(features)
-        adj_list.append(edge_index)
-    
-    return features_list, adj_list
+y_hosp = data1['y_hosp']
+y_no_hosp = data1['y_no_hosp']
 
 def collate_fn(batch):
     return Batch.from_data_list(batch)
-
-features_list, adj_list = process_images(X_no_hosp)
 
 # ================= STEP 2: Define GAT Model =================
 class GCN(torch.nn.Module):
@@ -104,6 +63,7 @@ classWeights = classWeights.to(device)
 best_val_auc = 0
 best_model_state = None
 all_loss = []
+roc_data_per_fold = []
 
 for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, groups=PatID_no_hosp)):
     print(f"\n--- Fold {fold+1} ---")
@@ -152,6 +112,9 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
 
     val_auc = roc_auc_score(y_true, y_scores)
     print(f"Fold {fold+1} AUC: {val_auc:.4f}")
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    roc_auc = auc(fpr, tpr)
+    roc_data_per_fold.append((fpr, tpr, roc_auc))
 
     if val_auc > best_val_auc:
         best_val_auc = val_auc
@@ -165,7 +128,6 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
     metrics["f1_0"].append(f1_score(y_true, y_pred, pos_label=0))
     metrics["f1_1"].append(f1_score(y_true, y_pred, pos_label=1))
     metrics["auc"].append(val_auc)
-
 
 # Print averaged metrics
 print("Averaged Metrics:")
@@ -201,10 +163,20 @@ plt.tight_layout()
 plt.savefig('/fhome/pmarti/TFGPau/ViT+GCN.png', dpi=300)
 plt.close()
 
+plt.figure(figsize=(10, 6))
+for i, (fpr, tpr, roc_auc) in enumerate(roc_data_per_fold):
+    plt.plot(fpr, tpr, label=f"Fold {i+1} (AUC = {roc_auc:.2f})")
+plt.plot([0, 1], [0, 1], 'k--', label='Random')
+plt.title("ROC Curves per Fold - ResNet+MLP")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("/fhome/pmarti/TFGPau/RocCurves/ViTGCN_Mitjana_ROC_PerFold.png", dpi=300)
+plt.close()
 
-features_list, adj_list = process_images(X_hosp)
-
-test_data = [Data(x=features_list[i], edge_index=adj_list[i], y=torch.tensor([y_hosp[i]])) for i in range(len(y_hosp))]
+test_data = [Data(x=features_list_h[i], edge_index=adj_list_h[i], y=torch.tensor([y_hosp[i]])) for i in range(len(y_hosp))]
 test_loader = DataLoader(test_data, batch_size=1, shuffle=True, collate_fn=collate_fn)
 
 gcn = GCN(in_channels=768, hidden_channels=256, out_channels=2).to(device)
@@ -212,6 +184,21 @@ gcn.load_state_dict(best_model_state)
 gcn.eval()
 
 y_true, y_pred, y_scores = evaluate_model(gcn, test_loader, device)
+
+fpr_test, tpr_test, _ = roc_curve(y_true, y_scores)
+roc_auc_test = auc(fpr_test, tpr_test)
+
+plt.figure(figsize=(8, 6))
+plt.plot(fpr_test, tpr_test, label=f"Holdout ROC (AUC = {roc_auc_test:.2f})", color="darkorange")
+plt.plot([0, 1], [0, 1], 'k--', label='Random')
+plt.title("ROC Curve - Holdout Set")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("/fhome/pmarti/TFGPau/RocCurves/ViTGCN_Mitjana_ROC_Holdout.png", dpi=300)
+plt.close()
 
 # Calcular mètriques
 auc_scores = roc_auc_score(y_true, y_scores)
