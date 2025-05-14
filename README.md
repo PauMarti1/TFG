@@ -150,3 +150,6 @@ CNN.py (CNN 3 Conv2d 50 epochs): Entreno validació i holdout utilitzant una cnn
 
 ## CNN Conv2d:
 ![No carrega](Images/CNN_Loss_per_fold.png)
+
+## ViT+CNN (Linear):
+![No carrega](Images/Vit+CNN.png)
