@@ -12,71 +12,26 @@ from sklearn.model_selection import StratifiedGroupKFold
 from torch_geometric.loader import DataLoader
 from collections import Counter
 from tqdm import tqdm
-from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score
+from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score, auc, roc_curve
 from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 import matplotlib.pyplot as plt
 
 # -----------------------
 # CONFIGURACIÓ I CÀRREGA DE DADES
-data = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
+data = np.load('/fhome/pmarti/TFGPau/processedIms.npz', allow_pickle=True)
+data1 = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
 
-X_no_hosp = data['X_no_hosp']
-y_no_hosp = data['y_no_hosp']
-PatID_no_hosp = data['PatID_no_hosp']
-coords_no_hosp = data['coords_no_hosp']
-infil_no_hosp = data['infil_no_hosp']
-X_hosp = data['X_hosp']
-y_hosp = data['y_hosp']
-PatID_hosp = data['PatID_hosp']
-coords_hosp = data['coords_hosp']
-infil_hosp = data['infil_hosp']
+features_list = data['features_list_ensemble_no_h']
+attn_list = data['adj_list_ensemble_no_h']
+edge_weights_list = data['edge_attr_list_ensemble_no_h']
 
-deit = ViTModel.from_pretrained("google/vit-base-patch16-224").eval()
-processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224")
+features_list_h = data['features_list_ensemble_h']
+attn_list_h = data['adj_list_ensemble_h'] 
+edge_weights_list_h = data['edge_attr_list_ensemble_no_h']
 
-def process_images(image_list, threshold=0.0):
-    features_list, adj_list, edge_attr_list = [], [], []
-
-    for image in tqdm(image_list, desc="Processing images"):
-        if isinstance(image, np.ndarray):
-            image = Image.fromarray((image * 255).astype(np.uint8))
-        else:
-            image = Image.open(image).convert("RGB")
-        
-        inputs = processor(image, return_tensors="pt")
-        with torch.no_grad():
-            outputs = deit(**inputs, output_attentions=True)
-            features = outputs.last_hidden_state.squeeze(0)[1:]  # (196, 768)
-            attentions = torch.stack(outputs.attentions)  # (12, 1, heads, 197, 197)
-            attentions = attentions.squeeze(1).mean(dim=1)  # (12, 197, 197)
-            attn_matrix = attentions[:, 1:, 1:]  # (12, 196, 196)
-
-        edge_indices_heads = []
-        edge_weights_heads = []
-
-        for layer_attn in attn_matrix:  # (196, 196) per cap
-            layer_attn_np = layer_attn.cpu().numpy()
-            edge_list = []
-            edge_weights = []
-            for i in range(layer_attn_np.shape[0]):
-                for j in range(layer_attn_np.shape[1]):
-                    weight = float(layer_attn_np[i, j])
-                    if weight > threshold:
-                        edge_list.append([i, j])
-                        edge_weights.append(weight)
-            edge_index = torch.tensor(edge_list, dtype=torch.long).t().contiguous()
-            edge_attr = torch.tensor(edge_weights, dtype=torch.float32)
-            edge_indices_heads.append(edge_index)
-            edge_weights_heads.append(edge_attr)
-
-        features_list.append(features)
-        adj_list.append(edge_indices_heads)
-        edge_attr_list.append(edge_weights_heads)
-
-    return features_list, adj_list, edge_attr_list
-
-features_list, attn_list, edge_weights_list = process_images(X_no_hosp)
+y_hosp = data1['y_hosp']
+y_no_hosp = data1['y_no_hosp']
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -111,29 +66,34 @@ best_model_states = [None] * 12
 all_train_losses = []        # [num_folds][12][num_epochs]
 val_losses_all_folds = []    # [num_folds][12]
 best_val_auc = 0
+all_true = [[[] for _ in range(12)] for _ in range(5)]
+all_scores = [[[] for _ in range(12)] for _ in range(5)]
 
-for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, groups=PatID_no_hosp)):
+for fold, (train_idx, val_idx) in enumerate(
+        skf.split(features_list, y_no_hosp, groups=PatID_no_hosp)):
     print(f"\n--- Fold {fold+1} ---")
     fold_losses = [[] for _ in range(12)]
-    val_fold_losses = []  # Per emmagatzemar la validació de cada fold
+    val_fold_losses = []
 
     models = [GATGraphClassifier(768, 256, 2).to(device) for _ in range(12)]
-    opts = [torch.optim.Adam(model.parameters(), lr=0.001) for model in models]
+    opts = [torch.optim.Adam(m.parameters(), lr=0.001) for m in models]
 
+    # Entrenament i validació interna per cada capa
     for layer_idx in range(12):
-        # Prepare training data
+        # Dades d'entrenament
         train_data = [
-            Data(x=features_list[i], edge_index=attn_list[i][layer_idx],
+            Data(x=features_list[i],
+                 edge_index=attn_list[i][layer_idx],
                  edge_attr=edge_weights_list[i][layer_idx],
                  y=torch.tensor([y_no_hosp[i]]))
             for i in train_idx
         ]
         train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
 
+        # Loop d'epochs
         for epoch in range(25):
-            # Training
             models[layer_idx].train()
-            epoch_losses = []
+            losses = []
             for batch in train_loader:
                 batch = batch.to(device)
                 opts[layer_idx].zero_grad()
@@ -141,86 +101,89 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
                 loss = loss_fn(out, batch.y)
                 loss.backward()
                 opts[layer_idx].step()
-                epoch_losses.append(loss.item())
-            fold_losses[layer_idx].append(np.mean(epoch_losses))
+                losses.append(loss.item())
+            fold_losses[layer_idx].append(np.mean(losses))
 
-        # --- Validació per fold ---
+        # Validació
         val_data = [
-            Data(x=features_list[i], edge_index=attn_list[i][layer_idx],
+            Data(x=features_list[i],
+                 edge_index=attn_list[i][layer_idx],
                  edge_attr=edge_weights_list[i][layer_idx],
                  y=torch.tensor([y_no_hosp[i]]))
             for i in val_idx
         ]
         val_loader = DataLoader(val_data, batch_size=1, shuffle=False)
 
-        # Validació
         models[layer_idx].eval()
-        val_epoch_losses = []
+        losses_val = []
+        y_true, y_scores = [], []
         with torch.no_grad():
             for batch in val_loader:
                 batch = batch.to(device)
                 out = models[layer_idx](batch)
-                val_loss = loss_fn(out, batch.y)
-                val_epoch_losses.append(val_loss.item())
-        val_fold_losses.append(np.mean(val_epoch_losses))
+                losses_val.append(loss_fn(out, batch.y).item())
+                prob = F.softmax(out, dim=1)
+                y_true.append(int(batch.y.item()))
+                y_scores.append(prob[0,1].item())
 
-    # Guardem losses de cada fold
+        val_fold_losses.append(np.mean(losses_val))
+        all_true[fold][layer_idx] = y_true
+        all_scores[fold][layer_idx] = y_scores
+
     val_losses_all_folds.append(val_fold_losses)
     all_train_losses.append(fold_losses)
 
-    # --- Ensemble Validation per fold ---
-    y_true, y_pred, y_scores = [], [], []
+    # Màxim voting ensemble
+    y_true_e, y_pred_e, y_scores_e = [], [], []
     for i in val_idx:
-        probs_list = []
+        probs = []
         for layer_idx in range(12):
             data = Data(
                 x=features_list[i],
                 edge_index=attn_list[i][layer_idx],
                 edge_attr=edge_weights_list[i][layer_idx]
             ).to(device)
-
             models[layer_idx].eval()
             with torch.no_grad():
                 out = models[layer_idx](data)
-                prob = F.softmax(out, dim=1)
-                probs_list.append(prob.cpu())
+                probs.append(F.softmax(out, dim=1).cpu())
+        avg = torch.stack(probs).mean(dim=0)
+        y_true_e.append(int(y_no_hosp[i]))
+        y_pred_e.append(avg[0].argmax().item())
+        y_scores_e.append(avg[0,1].item())
 
-        stacked = torch.stack(probs_list)  # [12, 1, 2]
-        probs_avg = stacked.mean(dim=0)    # [1, 2]
-        pred_score = probs_avg[0].argmax().item()
-        score_cls1 = probs_avg[0, 1].item()
-        
-        y_true.append(int(y_no_hosp[i]))
-        y_pred.append(pred_score)
-        y_scores.append(score_cls1)
+    auc_fold = roc_auc_score(y_true_e, y_scores_e)
+    print(f"Fold {fold+1} AUC (ensemble): {auc_fold:.4f}")
 
-    val_auc = roc_auc_score(y_true, y_scores)
-    print(f"Fold {fold+1} AUC: {val_auc:.4f}")
-
-    if val_auc > best_val_auc:
-        best_val_auc = val_auc
-        best_model_states = [model.state_dict() for model in models]
+    # Guarda els estats dels millors models
+    if auc_fold > best_val_auc:
+        best_val_auc = auc_fold
+        best_model_states = [m.state_dict() for m in models]
         torch.save(best_model_states, f"best_models_fold{fold+1}.pth")
 
-    metrics['recall_0'].append(recall_score(y_true, y_pred, pos_label=0))
-    metrics['recall_1'].append(recall_score(y_true, y_pred, pos_label=1))
-    metrics['precision_0'].append(precision_score(y_true, y_pred, pos_label=0))
-    metrics['precision_1'].append(precision_score(y_true, y_pred, pos_label=1))
-    metrics['f1_0'].append(f1_score(y_true, y_pred, pos_label=0))
-    metrics['f1_1'].append(f1_score(y_true, y_pred, pos_label=1))
-    metrics['auc'].append(val_auc)
+    # Metrics
+    metrics['auc'].append(auc_fold)
+    metrics['recall_0'].append(recall_score(y_true_e, y_pred_e, pos_label=0))
+    metrics['recall_1'].append(recall_score(y_true_e, y_pred_e, pos_label=1))
+    metrics['precision_0'].append(precision_score(y_true_e, y_pred_e, pos_label=0))
+    metrics['precision_1'].append(precision_score(y_true_e, y_pred_e, pos_label=1))
+    metrics['f1_0'].append(f1_score(y_true_e, y_pred_e, pos_label=0))
+    metrics['f1_1'].append(f1_score(y_true_e, y_pred_e, pos_label=1))
 
-    # Validation Loss Plot
-    plt.figure(figsize=(10, 6))
-    for layer_idx in range(12):
-        plt.plot(val_fold_losses[layer_idx], label=f'Val GAT {layer_idx+1}')
-    plt.title(f'Validation Loss per GAT (Fold {fold+1})')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
+for layer_idx in range(12):
+    plt.figure(figsize=(8,6))
+    for fold in range(5):
+        fpr, tpr, _ = roc_curve(all_true[fold][layer_idx], all_scores[fold][layer_idx])
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, label=f'Fold {fold+1} (AUC={roc_auc:.2f})')
+    plt.plot([0,1],[0,1],'k--')
+    plt.title(f'ROC Curves - GAT Model {layer_idx+1}')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.legend(loc='lower right')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(f'fhome/pmarti/TFGPau/Ensemble/val_loss_fold_{fold+1}.png')
+    plt.savefig(f'/fhome/pmarti/TFGPau/RocCurves/Ensemble/roc_gat_{layer_idx+1}.png')
     plt.close()
 
 for fold_idx, fold_losses in enumerate(all_loss):  # all_loss = list of 12 losses per fold
@@ -245,8 +208,6 @@ models = [GATGraphClassifier(768, 256, 2).to(device) for _ in range(12)]
 for i, model in enumerate(models):
     model.load_state_dict(best_model_states[i])
     model.eval()
-
-features_list_h, attn_list_h, edge_weights_list_h = process_images(X_hosp)
 
 y_true, y_pred, y_scores = [], [], []
 for i in range(len(X_hosp)):
@@ -273,6 +234,18 @@ for i in range(len(X_hosp)):
     y_pred.append(pred_score)
     y_scores.append(score_cls1)
 
+fpr_h, tpr_h, _ = roc_curve(y_true, y_scores)
+roc_auc_h = auc(fpr_h, tpr_h)
+plt.figure(figsize=(8,6))
+plt.plot(fpr_h, tpr_h, label=f'Holdout (AUC={roc_auc_h:.2f})')
+plt.plot([0,1],[0,1],'k--')
+plt.title('ROC Curve - Holdout')
+plt.xlabel('FPR'); plt.ylabel('TPR')
+plt.legend(loc='lower right'); plt.grid(True); plt.tight_layout()
+plt.savefig('/fhome/pmarti/TFGPau/Ensemble/roc_holdout.png')
+plt.close()
+
+print('Holdout AUC:', roc_auc_h)
 print('Holdout results:')
 print(f"AUC: {roc_auc_score(y_true, y_scores):.4f}")
 print(f"Recall Benigne: {recall_score(y_true, y_pred, pos_label=0):.4f}")
