@@ -29,24 +29,32 @@ PatID_no_hosp  = data['PatID_no_hosp']
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # ─── 2) Convertir attn_list a adj_list ─────────────────────────────────────────────
-# Threshold per filtrar connexions febles
 threshold = 0.0
+adj_list = []           # Llista de llargada igual al número d'imatges
+edge_weight_list = []   # Cada element contindrà 12 edge_index i 12 edge_weight
 
-# adj_list[i][l] = edge_index tensor per la imatge i i la capa l
-adj_list = []
-for i in range(len(attn_list)):
-    layers_adj = []
-    for l in range(12):
-        A = attn_list[i][l]                    # (N, N)
-        src, dst = np.where(A > threshold)     # nozero positions
-        edge_index = torch.tensor([src, dst], dtype=torch.long)  # shape [2, num_edges]
-        layers_adj.append(edge_index)
-    adj_list.append(layers_adj)
+for i in range(len(attn_matrices)):
+    # Una imatge conté 12 matrius d’atenció (una per cap)
+    adj_per_image = []
+    edge_weight_per_image = []
+    
+    for layer_idx in range(12):
+        edge_index_np, edge_weight_np = attn_to_graph(attn_matrices[i][layer_idx], threshold=threshold)
+        
+        edge_index = torch.tensor(edge_index_np, dtype=torch.long).t().contiguous()
+        edge_weight = torch.tensor(edge_weight_np, dtype=torch.float).view(-1)
+        
+        adj_per_image.append(edge_index)
+        edge_weight_per_image.append(edge_weight)
+
+    adj_list.append(adj_per_image)
+    edge_weight_list.append(edge_weight_per_image)
 
 # ─── 3) Model GCN ──────────────────────────────────────────────────────────────────
 class GCNGraphClassifier(torch.nn.Module):
-    def __init__(self, in_ch, hidden_ch, out_ch):
+    def __init__(self, in_ch, hidden_ch, out_ch, use_edge_weight=True):
         super().__init__()
+        self.use_edge_weight = use_edge_weight
         self.gcn1 = GCNConv(in_ch, hidden_ch)
         self.gcn2 = GCNConv(hidden_ch, hidden_ch)
         self.lin = torch.nn.Sequential(
@@ -56,10 +64,16 @@ class GCNGraphClassifier(torch.nn.Module):
             torch.nn.Linear(hidden_ch, out_ch)
         )
 
-    def forward(self, x, edge_index, batch_idx):
-        x = self.gcn1(x, edge_index)
-        x = F.relu(x)
-        x = self.gcn2(x, edge_index)
+    def forward(self, x, edge_index, edge_weight, batch_idx):
+        if self.use_edge_weight and edge_weight is not None:
+            x = self.gcn1(x, edge_index, edge_weight=edge_weight)
+            x = F.relu(x)
+            x = self.gcn2(x, edge_index, edge_weight=edge_weight)
+        else:
+            x = self.gcn1(x, edge_index)  # sense edge_weight
+            x = F.relu(x)
+            x = self.gcn2(x, edge_index)
+
         g = global_mean_pool(x, batch_idx)
         return self.lin(g), None
 
@@ -92,19 +106,20 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
         train_data = [
             Data(x=features_list[i],
                  edge_index=adj_list[i][layer_idx],
+                 edge_attr=edge_weight_list[i][layer_idx],
                  y=torch.tensor([y_no_hosp[i]]))
             for i in train_idx
         ]
         train_loader = DataLoader(train_data, batch_size=1, shuffle=True, collate_fn=collate_fn)
 
         # Epochs d’entrenament
-        for epoch in range(25):
+        for epoch in range(7):
             models[layer_idx].train()
             losses = []
             for batch in train_loader:
                 batch = batch.to(device)
                 opts[layer_idx].zero_grad()
-                out, _ = models[layer_idx](batch.x, batch.edge_index, batch.batch)
+                out, _ = models[layer_idx](batch.x, batch.edge_index, batch.edge_attr, batch.batch)
                 loss = loss_fn(out.mean(dim=0, keepdim=True), batch.y)
                 loss.backward()
                 opts[layer_idx].step()
@@ -119,10 +134,11 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
         probs_list = []
         for layer_idx in range(12):
             data = Data(x=features_list[i],
-                        edge_index=adj_list[i][layer_idx]).to(device)
+                        edge_index=adj_list[i][layer_idx],
+                        edge_attr=edge_weight_list[i][layer_idx]).to(device)
             models[layer_idx].eval()
             with torch.no_grad():
-                out, _ = models[layer_idx](data.x, data.edge_index, data.batch)
+                out, _ = models[layer_idx](data.x, data.edge_index, batch.edge_attr, data.batch)
                 prob = F.softmax(out.mean(dim=0), dim=0)
                 probs_list.append(prob.cpu())
 
