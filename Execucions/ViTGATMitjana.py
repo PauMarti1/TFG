@@ -63,6 +63,8 @@ class GAT(torch.nn.Module):
         self.threshold = threshold
 
     def forward(self, x, edge_index, edge_attr, batch_idx):
+        edge_attr  = edge_attr if self.use_edge_attr else None
+
         x = self.gat1(x, edge_index, edge_attr)
         x = F.relu(x)
         x = self.gat2(x, edge_index, edge_attr)
@@ -136,7 +138,7 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
 
     # 3) Entrenament (10 epochs)
     t_loss = []
-    for epoch in range(25):
+    for epoch in range(7):
         gat.train()
         epoch_losses = []
         for batch in train_loader:
