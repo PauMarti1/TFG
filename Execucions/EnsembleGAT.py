@@ -74,6 +74,8 @@ class GATGraphClassifier(torch.nn.Module):
         self.threshold = threshold
 
     def forward(self, x, edge_index, edge_attr, batch_idx):
+        edge_attr  = edge_attr if self.use_edge_attr else None
+
         x = self.gat1(x, edge_index, edge_attr)
         x = F.relu(x)
         x = self.gat2(x, edge_index, edge_attr)
@@ -110,7 +112,7 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
         ]
         train_loader = DataLoader(train_data, batch_size=1, shuffle=True, collate_fn=collate_fn)
 
-        for epoch in range(25):
+        for epoch in range(7):
             models[layer_idx].train()
             losses = []
             for batch in train_loader:
