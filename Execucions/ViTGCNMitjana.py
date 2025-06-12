@@ -121,7 +121,7 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
 
     t_loss = []
 
-    for epoch in range(25):
+    for epoch in range(7):
         gcn.train()
         e_loss = []
         for batch in train_loader:
