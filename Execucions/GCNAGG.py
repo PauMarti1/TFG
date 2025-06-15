@@ -16,6 +16,7 @@ from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_sco
 from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 import matplotlib.pyplot as plt
+from scipy.stats import ttest_1samp
 
 data = np.load('/fhome/pmarti/TFGPau/LargetissueDades_48_Norm.npz', allow_pickle=True)
 data1 = np.load('/fhome/pmarti/TFGPau/DBLarge_FeatMatNew_Reduit_norm.npz/DBLarge_FeatMatNew_Reduit_norm.npz', allow_pickle=True)
@@ -168,6 +169,10 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
 print("Averaged Metrics:")
 for key, vals in metrics.items():
     print(f"{key}: {np.mean(vals):.4f} ± {np.std(vals):.4f}")
+
+t_stat, p_value = ttest_1samp(metrics["auc"], 0.5)
+print(f"\nT-statistic (AUC vs 0.5): {t_stat:.4f}")
+print(f"P-value: {p_value:.4f}")
 
 # Plot training losses
 plt.figure(figsize=(10,6))
