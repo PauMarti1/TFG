@@ -18,6 +18,7 @@ from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 from torch_geometric.data import Batch
 import matplotlib.pyplot as plt
+from scipy.stats import ttest_1samp
 
 
 # -----------------------
@@ -193,119 +194,123 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
     metrics["f1_1"].append(f1_score(y_true, y_pred, pos_label=1))
     metrics["auc"].append(val_auc)
 
-# 7) Plots finals
+t_stat, p_value = ttest_1samp(metrics["auc"], 0.5)
+print(f"\nT-statistic (AUC vs 0.5): {t_stat:.4f}")
+print(f"P-value: {p_value:.4f}")
 
-# Training loss per fold (corba de 10 punts)
-plt.figure(figsize=(8, 5))
-for i, losses in enumerate(all_train_losses):
-    plt.plot(losses, label=f'Fold {i+1}')
-plt.xlabel('Epoch')
-plt.ylabel('Train Loss')
-plt.title('Train Loss per Fold')
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.savefig('/fhome/pmarti/TFGPau/train_loss_per_fold_ViTGAT.png', dpi=300)
-plt.close()
+# # 7) Plots finals
 
-plt.figure(figsize=(10, 6))
-for i, (fpr, tpr, roc_auc) in enumerate(roc_data_per_fold):
-    plt.plot(fpr, tpr, label=f"Fold {i+1} (AUC = {roc_auc:.2f})")
-plt.plot([0, 1], [0, 1], 'k--', label='Random')
-plt.title("ROC Curves per Fold - ResNet+MLP")
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.savefig("/fhome/pmarti/TFGPau/RocCurves/ViTGAT_Mitjana_ROC_PerFold.png", dpi=300)
-plt.close()
+# # Training loss per fold (corba de 10 punts)
+# plt.figure(figsize=(8, 5))
+# for i, losses in enumerate(all_train_losses):
+#     plt.plot(losses, label=f'Fold {i+1}')
+# plt.xlabel('Epoch')
+# plt.ylabel('Train Loss')
+# plt.title('Train Loss per Fold')
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
+# plt.savefig('/fhome/pmarti/TFGPau/train_loss_per_fold_ViTGAT.png', dpi=300)
+# plt.close()
 
-# Validation loss únic per fold (punt)
-plt.figure(figsize=(6, 4))
+# plt.figure(figsize=(10, 6))
+# for i, (fpr, tpr, roc_auc) in enumerate(roc_data_per_fold):
+#     plt.plot(fpr, tpr, label=f"Fold {i+1} (AUC = {roc_auc:.2f})")
+# plt.plot([0, 1], [0, 1], 'k--', label='Random')
+# plt.title("ROC Curves per Fold - ResNet+MLP")
+# plt.xlabel("False Positive Rate")
+# plt.ylabel("True Positive Rate")
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
+# plt.savefig("/fhome/pmarti/TFGPau/RocCurves/ViTGAT_Mitjana_ROC_PerFold.png", dpi=300)
+# plt.close()
 
-# 1) amb línia
-plt.plot(
-    range(1, len(val_loss_per_fold) + 1),   # X = folds 1,2,3…
-    val_loss_per_fold,                      # Y = les losses
-    'o-',                                   # punts amb línia
-    label='Val Loss per Fold'
-)
+# # Validation loss únic per fold (punt)
+# plt.figure(figsize=(6, 4))
 
-# 2) (opcional) o bé si vols un punt per fold sense línia:
-# plt.scatter(range(1, len(val_loss_per_fold) + 1), val_loss_per_fold)
+# # 1) amb línia
+# plt.plot(
+#     range(1, len(val_loss_per_fold) + 1),   # X = folds 1,2,3…
+#     val_loss_per_fold,                      # Y = les losses
+#     'o-',                                   # punts amb línia
+#     label='Val Loss per Fold'
+# )
 
-plt.xlabel('Fold')
-plt.ylabel('Val Loss')
-plt.title('Validation Loss per Fold')
-plt.xticks(range(1, len(val_loss_per_fold) + 1))
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.savefig('/fhome/pmarti/TFGPau/val_loss_per_fold_ViTGAT.png', dpi=300)
-plt.close()
+# # 2) (opcional) o bé si vols un punt per fold sense línia:
+# # plt.scatter(range(1, len(val_loss_per_fold) + 1), val_loss_per_fold)
 
-# Print averaged metrics
-print("Averaged Metrics:")
-for key, values in metrics.items():
-    print(f"{key}: {np.mean(values):.4f} ± {np.std(values):.4f}")
+# plt.xlabel('Fold')
+# plt.ylabel('Val Loss')
+# plt.title('Validation Loss per Fold')
+# plt.xticks(range(1, len(val_loss_per_fold) + 1))
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.savefig('/fhome/pmarti/TFGPau/val_loss_per_fold_ViTGAT.png', dpi=300)
+# plt.close()
 
-td = [Data(x=f_h[i], edge_index=a_h[i], edge_attr=edge_attr_list_h[i], y=torch.tensor([y_hosp[i]])) for i in range(len(y_hosp))]
-tl = DataLoader(td, batch_size=1, shuffle=False, collate_fn=collate_fn)
-model = GAT(768,256,2, threshold=0.0).to(device)
-model.load_state_dict(best_model_state); model.eval()
-yt, yp, ys = [], [], []
-with torch.no_grad():
-    for b in tl:
-        b = b.to(device)
-        logits, _ = model(b.x, b.edge_index, b.edge_attr, b.batch)
-        probs = F.softmax(logits, dim=1)
-        yt.append(b.y.item())
-        yp.append(probs.argmax(dim=1).item())
-        ys.append(probs[0,1].item())
-# final holdout metrics
-print("\nHoldout results:")
-print(f"AUC: {roc_auc_score(yt, ys):.4f}")
-print(f"Recall 0: {recall_score(yt, yp, pos_label=0):.4f}")
-print(f"Recall 1: {recall_score(yt, yp, pos_label=1):.4f}")
-print(f"Precision 0: {precision_score(yt, yp, pos_label=0):.4f}")
-print(f"Precision 1: {precision_score(yt, yp, pos_label=1):.4f}")
-print(f"F1 0: {f1_score(yt, yp, pos_label=0):.4f}")
-print(f"F1 1: {f1_score(yt, yp, pos_label=1):.4f}")
+# # Print averaged metrics
+# print("Averaged Metrics:")
+# for key, values in metrics.items():
+#     print(f"{key}: {np.mean(values):.4f} ± {np.std(values):.4f}")
 
-# ================= STEP 6: Plot Loss Curve =================
-plt.figure(figsize=(10,6))
-for i, losses in enumerate(all_loss):
-    plt.plot(losses, label=f"Fold {i+1}")
-plt.title("Training Loss per Fold")
-plt.xlabel("Epoch")
-plt.ylabel("Loss")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.savefig(r'/fhome/pmarti/TFGPau/ViTGAT_loss(train).png', dpi=300)
-plt.close()
+# td = [Data(x=f_h[i], edge_index=a_h[i], edge_attr=edge_attr_list_h[i], y=torch.tensor([y_hosp[i]])) for i in range(len(y_hosp))]
+# tl = DataLoader(td, batch_size=1, shuffle=False, collate_fn=collate_fn)
+# model = GAT(768,256,2, threshold=0.0).to(device)
+# model.load_state_dict(best_model_state); model.eval()
+# yt, yp, ys = [], [], []
+# with torch.no_grad():
+#     for b in tl:
+#         b = b.to(device)
+#         logits, _ = model(b.x, b.edge_index, b.edge_attr, b.batch)
+#         probs = F.softmax(logits, dim=1)
+#         yt.append(b.y.item())
+#         yp.append(probs.argmax(dim=1).item())
+#         ys.append(probs[0,1].item())
+# # final holdout metrics
+# print("\nHoldout results:")
+# print(f"AUC: {roc_auc_score(yt, ys):.4f}")
+# print(f"Recall 0: {recall_score(yt, yp, pos_label=0):.4f}")
+# print(f"Recall 1: {recall_score(yt, yp, pos_label=1):.4f}")
+# print(f"Precision 0: {precision_score(yt, yp, pos_label=0):.4f}")
+# print(f"Precision 1: {precision_score(yt, yp, pos_label=1):.4f}")
+# print(f"F1 0: {f1_score(yt, yp, pos_label=0):.4f}")
+# print(f"F1 1: {f1_score(yt, yp, pos_label=1):.4f}")
 
-# Validation loss únic per fold (punt)
-plt.figure(figsize=(6, 4))
+# # ================= STEP 6: Plot Loss Curve =================
+# plt.figure(figsize=(10,6))
+# for i, losses in enumerate(all_loss):
+#     plt.plot(losses, label=f"Fold {i+1}")
+# plt.title("Training Loss per Fold")
+# plt.xlabel("Epoch")
+# plt.ylabel("Loss")
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
+# plt.savefig(r'/fhome/pmarti/TFGPau/ViTGAT_loss(train).png', dpi=300)
+# plt.close()
 
-# 1) amb línia
-plt.plot(
-    range(1, len(val_loss_per_fold) + 1),   # X = folds 1,2,3…
-    val_loss_per_fold,                      # Y = les losses
-    'o-',                                   # punts amb línia
-    label='Val Loss per Fold'
-)
+# # Validation loss únic per fold (punt)
+# plt.figure(figsize=(6, 4))
 
-# 2) (opcional) o bé si vols un punt per fold sense línia:
-# plt.scatter(range(1, len(val_loss_per_fold) + 1), val_loss_per_fold)
+# # 1) amb línia
+# plt.plot(
+#     range(1, len(val_loss_per_fold) + 1),   # X = folds 1,2,3…
+#     val_loss_per_fold,                      # Y = les losses
+#     'o-',                                   # punts amb línia
+#     label='Val Loss per Fold'
+# )
 
-plt.xlabel('Fold')
-plt.ylabel('Val Loss')
-plt.title('Validation Loss per Fold')
-plt.xticks(range(1, len(val_loss_per_fold) + 1))
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.savefig('/fhome/pmarti/TFGPau/ViTGAT_loss(validacio).png', dpi=300)
-plt.close()
+# # 2) (opcional) o bé si vols un punt per fold sense línia:
+# # plt.scatter(range(1, len(val_loss_per_fold) + 1), val_loss_per_fold)
+
+# plt.xlabel('Fold')
+# plt.ylabel('Val Loss')
+# plt.title('Validation Loss per Fold')
+# plt.xticks(range(1, len(val_loss_per_fold) + 1))
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.savefig('/fhome/pmarti/TFGPau/ViTGAT_loss(validacio).png', dpi=300)
+# plt.close()
