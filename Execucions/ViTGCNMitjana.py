@@ -18,6 +18,7 @@ from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 from torch_geometric.data import Batch
 import matplotlib.pyplot as plt
+from scipy.stats import ttest_1samp
 
 
 data = np.load('/fhome/pmarti/TFGPau/LargetissueDades_48_Norm.npz', allow_pickle=True)
@@ -174,6 +175,10 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
 print("Averaged Metrics:")
 for key, values in metrics.items():
     print(f"{key}: {np.mean(values):.4f} ± {np.std(values):.4f}")
+
+t_stat, p_value = ttest_1samp(metrics["auc"], 0.5)
+print(f"\nT-statistic (AUC vs 0.5): {t_stat:.4f}")
+print(f"P-value: {p_value:.4f}")
 
 def evaluate_model(model, dataloader, device):
     model.eval()
