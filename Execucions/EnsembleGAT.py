@@ -16,6 +16,7 @@ from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_sco
 from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 import matplotlib.pyplot as plt
+from scipy.stats import ttest_1samp
 
 # -----------------------
 # CONFIGURACIÓ I CÀRREGA DE DADES
@@ -188,92 +189,95 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, 
     metrics['f1_0'].append(f1_score(y_true_e, y_pred_e, pos_label=0))
     metrics['f1_1'].append(f1_score(y_true_e, y_pred_e, pos_label=1))
 
+t_stat, p_value = ttest_1samp(metrics["auc"], 0.5)
+print(f"\nT-statistic (AUC vs 0.5): {t_stat:.4f}")
+print(f"P-value: {p_value:.4f}")
 
-for layer_idx in range(12):
-    plt.figure(figsize=(8,6))
-    for fold in range(5):
-        fpr, tpr, _ = roc_curve(all_true[fold][layer_idx], all_scores[fold][layer_idx])
-        roc_auc = auc(fpr, tpr)
-        plt.plot(fpr, tpr, label=f'Fold {fold+1} (AUC={roc_auc:.2f})')
-    plt.plot([0,1],[0,1],'k--')
-    plt.title(f'ROC Curves - GAT Model {layer_idx+1}')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.legend(loc='lower right')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(f'/fhome/pmarti/TFGPau/RocCurves/Ensemble/roc_gat_{layer_idx+1}.png')
-    plt.close()
+# for layer_idx in range(12):
+#     plt.figure(figsize=(8,6))
+#     for fold in range(5):
+#         fpr, tpr, _ = roc_curve(all_true[fold][layer_idx], all_scores[fold][layer_idx])
+#         roc_auc = auc(fpr, tpr)
+#         plt.plot(fpr, tpr, label=f'Fold {fold+1} (AUC={roc_auc:.2f})')
+#     plt.plot([0,1],[0,1],'k--')
+#     plt.title(f'ROC Curves - GAT Model {layer_idx+1}')
+#     plt.xlabel('False Positive Rate')
+#     plt.ylabel('True Positive Rate')
+#     plt.legend(loc='lower right')
+#     plt.grid(True)
+#     plt.tight_layout()
+#     plt.savefig(f'/fhome/pmarti/TFGPau/RocCurves/Ensemble/roc_gat_{layer_idx+1}.png')
+#     plt.close()
 
-for fold_idx, fold_losses in enumerate(all_loss):  # all_loss = list of 12 losses per fold
-    plt.figure(figsize=(10, 6))
-    for layer_idx in range(12):
-        plt.plot(fold_losses[layer_idx], label=f'GAT {layer_idx+1}')
-    plt.title(f'Training Loss per GAT (Fold {fold_idx+1})')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(f'/fhome/pmarti/TFGPau/Ensemble/loss_fold_{fold_idx+1}.png')  # 🔽 guarda la figura
-    plt.close()
-
-print("Averaged Metrics:")
-for key, vals in metrics.items():
-    print(f"{key}: {np.mean(vals):.4f} ± {np.std(vals):.4f}")
-
-# Holdout
-# models = [GATGraphClassifier(768, 256, 2).to(device) for _ in range(12)]
-# for i, model in enumerate(models):
-#     model.load_state_dict(best_model_states[i])
-#     model.eval()
-
-# y_true, y_pred, y_scores = [], [], []
-
-# y_true, y_pred, y_scores = [], [], []
-
-# for i in range(len(X_hosp)):
-#     probs_list = []
+# for fold_idx, fold_losses in enumerate(all_loss):  # all_loss = list of 12 losses per fold
+#     plt.figure(figsize=(10, 6))
 #     for layer_idx in range(12):
-#         batch = Data(
-#             x=features_list_h[i],
-#             edge_index=attn_list_h[i][layer_idx],
-#             edge_attr=edge_weights_list_h[i][layer_idx]
-#         ).to(device)
+#         plt.plot(fold_losses[layer_idx], label=f'GAT {layer_idx+1}')
+#     plt.title(f'Training Loss per GAT (Fold {fold_idx+1})')
+#     plt.xlabel('Epoch')
+#     plt.ylabel('Loss')
+#     plt.legend()
+#     plt.grid(True)
+#     plt.tight_layout()
+#     plt.savefig(f'/fhome/pmarti/TFGPau/Ensemble/loss_fold_{fold_idx+1}.png')  # 🔽 guarda la figura
+#     plt.close()
 
-#         with torch.no_grad():
-#             out, _ = models[layer_idx](batch.x, batch.edge_index, batch.edge_attr, batch.batch)  # [1, 2]
-#             prob = F.softmax(out, dim=1)  # [1, 2]
-#             probs_list.append(prob.cpu())
+# print("Averaged Metrics:")
+# for key, vals in metrics.items():
+#     print(f"{key}: {np.mean(vals):.4f} ± {np.std(vals):.4f}")
 
-#     stacked = torch.stack(probs_list)  # [12, 1, 2]
-#     probs_avg = stacked.mean(dim=0)  # [1, 2]
+# # Holdout
+# # models = [GATGraphClassifier(768, 256, 2).to(device) for _ in range(12)]
+# # for i, model in enumerate(models):
+# #     model.load_state_dict(best_model_states[i])
+# #     model.eval()
 
-#     pred_score = probs_avg[0].argmax().item()
-#     score_cls1 = probs_avg[0, 1].item()
+# # y_true, y_pred, y_scores = [], [], []
 
-#     y_true.append(int(y_hosp[i]))
-#     y_pred.append(pred_score)
-#     y_scores.append(score_cls1)
+# # y_true, y_pred, y_scores = [], [], []
+
+# # for i in range(len(X_hosp)):
+# #     probs_list = []
+# #     for layer_idx in range(12):
+# #         batch = Data(
+# #             x=features_list_h[i],
+# #             edge_index=attn_list_h[i][layer_idx],
+# #             edge_attr=edge_weights_list_h[i][layer_idx]
+# #         ).to(device)
+
+# #         with torch.no_grad():
+# #             out, _ = models[layer_idx](batch.x, batch.edge_index, batch.edge_attr, batch.batch)  # [1, 2]
+# #             prob = F.softmax(out, dim=1)  # [1, 2]
+# #             probs_list.append(prob.cpu())
+
+# #     stacked = torch.stack(probs_list)  # [12, 1, 2]
+# #     probs_avg = stacked.mean(dim=0)  # [1, 2]
+
+# #     pred_score = probs_avg[0].argmax().item()
+# #     score_cls1 = probs_avg[0, 1].item()
+
+# #     y_true.append(int(y_hosp[i]))
+# #     y_pred.append(pred_score)
+# #     y_scores.append(score_cls1)
 
 
-# fpr_h, tpr_h, _ = roc_curve(y_true, y_scores)
-# roc_auc_h = auc(fpr_h, tpr_h)
-# plt.figure(figsize=(8,6))
-# plt.plot(fpr_h, tpr_h, label=f'Holdout (AUC={roc_auc_h:.2f})')
-# plt.plot([0,1],[0,1],'k--')
-# plt.title('ROC Curve - Holdout')
-# plt.xlabel('FPR'); plt.ylabel('TPR')
-# plt.legend(loc='lower right'); plt.grid(True); plt.tight_layout()
-# plt.savefig('/fhome/pmarti/TFGPau/Ensemble/roc_holdout.png')
-# plt.close()
+# # fpr_h, tpr_h, _ = roc_curve(y_true, y_scores)
+# # roc_auc_h = auc(fpr_h, tpr_h)
+# # plt.figure(figsize=(8,6))
+# # plt.plot(fpr_h, tpr_h, label=f'Holdout (AUC={roc_auc_h:.2f})')
+# # plt.plot([0,1],[0,1],'k--')
+# # plt.title('ROC Curve - Holdout')
+# # plt.xlabel('FPR'); plt.ylabel('TPR')
+# # plt.legend(loc='lower right'); plt.grid(True); plt.tight_layout()
+# # plt.savefig('/fhome/pmarti/TFGPau/Ensemble/roc_holdout.png')
+# # plt.close()
 
-# print('Holdout AUC:', roc_auc_h)
-# print('Holdout results:')
-# print(f"AUC: {roc_auc_score(y_true, y_scores):.4f}")
-# print(f"Recall Benigne: {recall_score(y_true, y_pred, pos_label=0):.4f}")
-# print(f"Recall Maligne: {recall_score(y_true, y_pred, pos_label=1):.4f}")
-# print(f"Precision Benigne: {precision_score(y_true, y_pred, pos_label=0):.4f}")
-# print(f"Precision Maligne: {precision_score(y_true, y_pred, pos_label=1):.4f}")
-# print(f"F1-score Benigne: {f1_score(y_true, y_pred, pos_label=0):.4f}")
-# print(f"F1-score Maligne: {f1_score(y_true, y_pred, pos_label=1):.4f}")
+# # print('Holdout AUC:', roc_auc_h)
+# # print('Holdout results:')
+# # print(f"AUC: {roc_auc_score(y_true, y_scores):.4f}")
+# # print(f"Recall Benigne: {recall_score(y_true, y_pred, pos_label=0):.4f}")
+# # print(f"Recall Maligne: {recall_score(y_true, y_pred, pos_label=1):.4f}")
+# # print(f"Precision Benigne: {precision_score(y_true, y_pred, pos_label=0):.4f}")
+# # print(f"Precision Maligne: {precision_score(y_true, y_pred, pos_label=1):.4f}")
+# # print(f"F1-score Benigne: {f1_score(y_true, y_pred, pos_label=0):.4f}")
+# # print(f"F1-score Maligne: {f1_score(y_true, y_pred, pos_label=1):.4f}")
