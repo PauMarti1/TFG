@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score, roc_curve
 
 # Load data
-data = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
+data = np.load('/fhome/pmarti/TFGPau/LargetissueDades_48_Norm.npz', allow_pickle=True)
 X_no_hosp = data['X_no_hosp']
 y_no_hosp = data['y_no_hosp']
 PatID_no_hosp = data['PatID_no_hosp']
@@ -59,19 +59,14 @@ class SimpleCNN(nn.Module):
         x = self.fc(x)
         return x
 
-# Class weights
-class_weights = 1.0 / torch.bincount(torch.tensor(y_no_hosp)).float()
-class_weights = class_weights / class_weights.sum()
-class_weights = class_weights.to(device)
-
 # Entrenament
 def train_model(train_loader, val_loader, model, epochs=25):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    criterion = nn.CrossEntropyLoss()
     t_loss = []
-    metrics = {"recall_0": [], "recall_1": [], "precision_0": [], "precision_1": [], "f1_0": [], "f1_1": [], "auc": []}
+    metrics = {"recall_0": [], "recall_1": [], "precision_0": [], "precision_1": [], "f1_0": [], "f1_1": [], "auc": [], "y_true" : [], "y_pred" : [], 'y_scores' : []}
 
-    for epoch in range(50):
+    for epoch in range(7):
         model.train()
         epoch_loss = []
         for images, labels in train_loader:
@@ -103,11 +98,14 @@ def train_model(train_loader, val_loader, model, epochs=25):
         metrics["f1_0"].append(f1_score(val_true, val_preds, pos_label=0))
         metrics["f1_1"].append(f1_score(val_true, val_preds, pos_label=1))
         metrics["auc"].append(roc_auc_score(val_true, val_scores))
+        metrics["y_true"].append(val_true)
+        metrics["y_pred"].append(val_preds)
+        metrics['y_scores'].append(val_scores)
     
     return model, t_loss, metrics, val_true, val_scores
 
 # StratifiedGroupKFold
-skf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+skf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=2)
 all_metrics = {"recall_0": [], "recall_1": [], "precision_0": [], "precision_1": [], "f1_0": [], "f1_1": [], "auc": []}
 all_loss = []
 all_val_true = []
@@ -118,8 +116,8 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(X_no_hosp, y_no_hosp, grou
     model = SimpleCNN().to(device)
     train_dataset = CNNImageDataset(X_no_hosp[train_idx], y_no_hosp[train_idx], transform)
     val_dataset = CNNImageDataset(X_no_hosp[val_idx], y_no_hosp[val_idx], transform)
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
     model, losses, fold_metrics, val_true, val_scores = train_model(train_loader, val_loader, model)
     all_loss.append(losses)
     all_val_true.append(val_true)
@@ -145,56 +143,66 @@ plt.tight_layout()
 plt.savefig("/fhome/pmarti/TFGPau/images/CNN_Loss_per_fold.png", dpi=300)
 plt.close()
 
-plt.figure(figsize=(10, 6))
+roc_folds = []
+
 for i in range(len(all_val_true)):
     fpr, tpr, _ = roc_curve(all_val_true[i], all_val_scores[i])
-    auc_score = roc_auc_score(all_val_true[i], all_val_scores[i])
-    plt.plot(fpr, tpr, label=f"Fold {i+1} (AUC = {auc_score:.2f})")
+    roc_folds.append((fpr, tpr))
 
-plt.plot([0, 1], [0, 1], 'k--', label="Random")
-plt.title("ROC Curve per Fold")
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.savefig("/fhome/pmarti/TFGPau/RocCurves/CNN_ROC_per_fold.png", dpi=300)
-plt.close()
 
-# Avaluació en holdout
-test_dataset = CNNImageDataset(X_hosp, y_hosp, transform)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
-model.eval()
-test_preds, test_true, test_scores = [], [], []
-with torch.no_grad():
-    for images, labels in test_loader:
-        images, labels = images.to(device), labels.to(device)
-        outputs = model(images)
-        probs = F.softmax(outputs, dim=1)
-        test_preds.extend(torch.argmax(probs, dim=1).cpu().numpy())
-        test_true.extend(labels.cpu().numpy())
-        test_scores.extend(probs[:, 1].cpu().numpy())
+np.savez(
+    '/fhome/pmarti/TFGPau/NPZs/CNN.npz',
+    metrics=np.array(fold_metrics, dtype=object),
+    val_loss_per_fold=np.array(all_loss, dtype=object),
+    roc_data_per_fold=np.array(roc_folds, dtype=object), allow_pickle=True)
+# plt.figure(figsize=(10, 6))
+# 
+#     plt.plot(fpr, tpr, label=f"Fold {i+1} (AUC = {auc_score:.2f})")
 
-print(f"\n== Holdout Results ==")
-print(f"AUC: {roc_auc_score(test_true, test_scores):.4f}")
-print(f"Recall Benigne: {recall_score(test_true, test_preds, pos_label=0):.4f}")
-print(f"Recall Maligne: {recall_score(test_true, test_preds, pos_label=1):.4f}")
-print(f"Precision Benigne: {precision_score(test_true, test_preds, pos_label=0):.4f}")
-print(f"Precision Maligne: {precision_score(test_true, test_preds, pos_label=1):.4f}")
-print(f"F1-score Benigne: {f1_score(test_true, test_preds, pos_label=0):.4f}")
-print(f"F1-score Maligne: {f1_score(test_true, test_preds, pos_label=1):.4f}")
+# plt.plot([0, 1], [0, 1], 'k--', label="Random")
+# plt.title("ROC Curve per Fold")
+# plt.xlabel("False Positive Rate")
+# plt.ylabel("True Positive Rate")
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
+# plt.savefig("/fhome/pmarti/TFGPau/RocCurves/CNN_ROC_per_fold.png", dpi=300)
+# plt.close()
 
-fpr, tpr, _ = roc_curve(test_true, test_scores)
-auc_score = roc_auc_score(test_true, test_scores)
+# # Avaluació en holdout
+# test_dataset = CNNImageDataset(X_hosp, y_hosp, transform)
+# test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+# model.eval()
+# test_preds, test_true, test_scores = [], [], []
+# with torch.no_grad():
+#     for images, labels in test_loader:
+#         images, labels = images.to(device), labels.to(device)
+#         outputs = model(images)
+#         probs = F.softmax(outputs, dim=1)
+#         test_preds.extend(torch.argmax(probs, dim=1).cpu().numpy())
+#         test_true.extend(labels.cpu().numpy())
+#         test_scores.extend(probs[:, 1].cpu().numpy())
 
-plt.figure(figsize=(8, 6))
-plt.plot(fpr, tpr, label=f"AUC = {auc_score:.2f}")
-plt.plot([0, 1], [0, 1], 'k--', label="Random")
-plt.title("ROC Curve - Holdout Set")
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.savefig("/fhome/pmarti/TFGPau/RocCurves/CNN_ROC_holdout.png", dpi=300)
-plt.close()
+# print(f"\n== Holdout Results ==")
+# print(f"AUC: {roc_auc_score(test_true, test_scores):.4f}")
+# print(f"Recall Benigne: {recall_score(test_true, test_preds, pos_label=0):.4f}")
+# print(f"Recall Maligne: {recall_score(test_true, test_preds, pos_label=1):.4f}")
+# print(f"Precision Benigne: {precision_score(test_true, test_preds, pos_label=0):.4f}")
+# print(f"Precision Maligne: {precision_score(test_true, test_preds, pos_label=1):.4f}")
+# print(f"F1-score Benigne: {f1_score(test_true, test_preds, pos_label=0):.4f}")
+# print(f"F1-score Maligne: {f1_score(test_true, test_preds, pos_label=1):.4f}")
+
+# fpr, tpr, _ = roc_curve(test_true, test_scores)
+# auc_score = roc_auc_score(test_true, test_scores)
+
+# plt.figure(figsize=(8, 6))
+# plt.plot(fpr, tpr, label=f"AUC = {auc_score:.2f}")
+# plt.plot([0, 1], [0, 1], 'k--', label="Random")
+# plt.title("ROC Curve - Holdout Set")
+# plt.xlabel("False Positive Rate")
+# plt.ylabel("True Positive Rate")
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
+# plt.savefig("/fhome/pmarti/TFGPau/RocCurves/CNN_ROC_holdout.png", dpi=300)
+# plt.close()

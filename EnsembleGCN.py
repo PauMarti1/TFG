@@ -6,7 +6,7 @@ from ismember import ismember
 from random import shuffle
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, global_mean_pool
 from torch_geometric.data import Data, Batch
 from sklearn.model_selection import StratifiedGroupKFold
 from torch_geometric.loader import DataLoader
@@ -16,113 +16,146 @@ from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_sco
 from PIL import Image
 from transformers import AutoImageProcessor, ViTModel
 import matplotlib.pyplot as plt
+from scipy.stats import ttest_1samp
 
-data = np.load('/fhome/pmarti/TFGPau/processedIms.npz', allow_pickle=True)
-data1 = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
+data   = np.load('/fhome/pmarti/TFGPau/LargetissueDades_48_Norm.npz', allow_pickle=True)
+data1  = np.load('/fhome/pmarti/TFGPau/DBLarge_FeatMatNew_Reduit_norm.npz/DBLarge_FeatMatNew_Reduit_norm.npz', allow_pickle=True)
 
-features_list = data['features_list_ensemble_no_h']
-attn_list = data['adj_list_ensemble_no_h']
-
-features_list_h = data['features_list_ensemble_h']
-attn_list_h = data['adj_list_ensemble_h']
-
-y_hosp = data1['y_hosp']
-y_no_hosp = data1['y_no_hosp']
+X_hosp         = data['X_hosp']
+features_list  = data1['features_list']
+attn_list      = data1['attn_matrices']   # shape: [num_images, 12, N, N]
+y_hosp         = data['y_hosp']
+y_no_hosp      = data['y_no_hosp']
+PatID_no_hosp  = data['PatID_no_hosp']
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# GCN model
+# ─── 2) Convertir attn_list a adj_list ─────────────────────────────────────────────
+threshold = 0.0
+adj_list = []           # Llista de llargada igual al número d'imatges
+edge_weight_list = []   # Cada element contindrà 12 edge_index i 12 edge_weight
+
+for i in range(len(attn_matrices)):
+    # Una imatge conté 12 matrius d’atenció (una per cap)
+    adj_per_image = []
+    edge_weight_per_image = []
+    
+    for layer_idx in range(12):
+        edge_index_np, edge_weight_np = attn_to_graph(attn_matrices[i][layer_idx], threshold=threshold)
+        
+        edge_index = torch.tensor(edge_index_np, dtype=torch.long).t().contiguous()
+        edge_weight = torch.tensor(edge_weight_np, dtype=torch.float).view(-1)
+        
+        adj_per_image.append(edge_index)
+        edge_weight_per_image.append(edge_weight)
+
+    adj_list.append(adj_per_image)
+    edge_weight_list.append(edge_weight_per_image)
+
+# ─── 3) Model GCN ──────────────────────────────────────────────────────────────────
 class GCNGraphClassifier(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels):
+    def __init__(self, in_ch, hidden_ch, out_ch, use_edge_weight=True):
         super().__init__()
-        self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, out_channels)
+        self.use_edge_weight = use_edge_weight
+        self.gcn1 = GCNConv(in_ch, hidden_ch)
+        self.gcn2 = GCNConv(hidden_ch, hidden_ch)
+        self.lin = torch.nn.Sequential(
+            torch.nn.Linear(hidden_ch, hidden_ch),
+            torch.nn.ReLU(),
+            torch.nn.LayerNorm(hidden_ch),
+            torch.nn.Linear(hidden_ch, out_ch)
+        )
 
-    def forward(self, x, edge_index):
-        x = self.conv1(x, edge_index)
-        x = F.relu(x)
-        x = self.conv2(x, edge_index)
-        return x
+    def forward(self, x, edge_index, edge_weight, batch_idx):
+        if self.use_edge_weight and edge_weight is not None:
+            x = self.gcn1(x, edge_index, edge_weight=edge_weight)
+            x = F.relu(x)
+            x = self.gcn2(x, edge_index, edge_weight=edge_weight)
+        else:
+            x = self.gcn1(x, edge_index)  # sense edge_weight
+            x = F.relu(x)
+            x = self.gcn2(x, edge_index)
 
-classCount = torch.bincount(torch.tensor(y_no_hosp))
-classWeights = 1.0 / classCount.float()
-classWeights = (classWeights / classWeights.sum()).to(device)
-loss_fn = torch.nn.CrossEntropyLoss(weight=classWeights)
+        g = global_mean_pool(x, batch_idx)
+        return self.lin(g), None
 
-skf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+# ─── 4) Configuració d’entrenament ─────────────────────────────────────────────────
+loss_fn = torch.nn.CrossEntropyLoss()
+skf     = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=2)
+
 metrics = {m: [] for m in ["recall_0","recall_1","precision_0","precision_1","f1_0","f1_1","auc"]}
-all_loss = []
-best_val_auc = 0
+best_val_auc     = 0
 best_model_states = [None] * 12
+all_true  = [[[] for _ in range(12)] for _ in range(5)]
+all_scores= [[[] for _ in range(12)] for _ in range(5)]
+all_loss  = []
 
-all_true = [[[] for _ in range(12)] for _ in range(5)]
-all_scores = [[[] for _ in range(12)] for _ in range(5)]
+def collate_fn(batch):
+    return Batch.from_data_list(batch)
 
-for fold, (train_idx, val_idx) in enumerate(
-        skf.split(features_list, y_no_hosp, groups=PatID_no_hosp)):
+# ─── 5) Boucle de K-Fold ───────────────────────────────────────────────────────────
+for fold, (train_idx, val_idx) in enumerate(skf.split(features_list, y_no_hosp, groups=PatID_no_hosp)):
     print(f"\n--- Fold {fold+1} ---")
     fold_losses = [[] for _ in range(12)]
 
-    # Inicialitzar 12 models GCN
+    # Initialitzar 12 models GCN i optimitzadors
     models = [GCNGraphClassifier(768, 256, 2).to(device) for _ in range(12)]
-    opts = [torch.optim.Adam(m.parameters(), lr=0.001) for m in models]
+    opts   = [torch.optim.Adam(m.parameters(), lr=0.001) for m in models]
 
-    # Entrenament de cada GCN amb threshold del adjacency
+    # Entrenament de cada GCN (una per capa d’atenció)
     for layer_idx in range(12):
-        train_data = []
-        for i in train_idx:
-            adj = attn_list[i][layer_idx]
-            edge_index = (adj >= torch.quantile(adj, 0.9))\
-                .nonzero(as_tuple=False).t().contiguous()
-            train_data.append(
-                Data(x=features_list[i], edge_index=edge_index,
-                     y=torch.tensor([y_no_hosp[i]]))
-            )
-        train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
+        # Dataset de entrenament per la capa layer_idx
+        train_data = [
+            Data(x=features_list[i],
+                 edge_index=adj_list[i][layer_idx],
+                 edge_attr=edge_weight_list[i][layer_idx],
+                 y=torch.tensor([y_no_hosp[i]]))
+            for i in train_idx
+        ]
+        train_loader = DataLoader(train_data, batch_size=1, shuffle=True, collate_fn=collate_fn)
 
-        for epoch in range(25):
+        # Epochs d’entrenament
+        for epoch in range(7):
             models[layer_idx].train()
-            epoch_losses = []
+            losses = []
             for batch in train_loader:
                 batch = batch.to(device)
                 opts[layer_idx].zero_grad()
-                out = models[layer_idx](batch.x, batch.edge_index)
+                out, _ = models[layer_idx](batch.x, batch.edge_index, batch.edge_attr, batch.batch)
                 loss = loss_fn(out.mean(dim=0, keepdim=True), batch.y)
                 loss.backward()
                 opts[layer_idx].step()
-                epoch_losses.append(loss.item())
-            fold_losses[layer_idx].append(np.mean(epoch_losses))
+                losses.append(loss.item())
+            fold_losses[layer_idx].append(np.mean(losses))
 
-    # Emmagatzemar loss mitjana de cada GCN
     all_loss.append([np.mean(l) for l in fold_losses])
 
-    # Validació per folds i càlcul de ROC per cada GCN
+    # Validació i càlcul de ROC per cada GCN
     y_true, y_pred, y_scores = [], [], []
     for i in val_idx:
         probs_list = []
         for layer_idx in range(12):
-            adj = attn_list[i][layer_idx]
-            edge_index = (adj >= torch.quantile(adj, 0.9))\
-                .nonzero(as_tuple=False).t().contiguous()
-            data = Data(x=features_list[i], edge_index=edge_index).to(device)
+            data = Data(x=features_list[i],
+                        edge_index=adj_list[i][layer_idx],
+                        edge_attr=edge_weight_list[i][layer_idx]).to(device)
             models[layer_idx].eval()
             with torch.no_grad():
-                out = models[layer_idx](data.x, data.edge_index)
+                out, _ = models[layer_idx](data.x, data.edge_index, batch.edge_attr, data.batch)
                 prob = F.softmax(out.mean(dim=0), dim=0)
                 probs_list.append(prob.cpu())
 
                 all_true[fold][layer_idx].append(int(y_no_hosp[i]))
                 all_scores[fold][layer_idx].append(prob[1].item())
 
-        probs_tensor = torch.stack(probs_list)
-        probs_avg = probs_tensor.mean(dim=0)
+        # Ensemble per vot majoritari (mitjana de probabilitats)
+        probs_avg = torch.stack(probs_list).mean(dim=0)
         pred = probs_avg.argmax().item()
 
         y_true.append(int(y_no_hosp[i]))
         y_pred.append(pred)
         y_scores.append(probs_avg[1].item())
 
-    # Càlcul de mètriques i AUC
+    # Mètriques del fold
     val_auc = roc_auc_score(y_true, y_scores)
     print(f"Fold {fold+1} AUC: {val_auc:.4f}")
     if val_auc > best_val_auc:
@@ -170,6 +203,10 @@ print("Averaged Metrics:")
 for key, vals in metrics.items():
     print(f"{key}: {np.mean(vals):.4f} ± {np.std(vals):.4f}")
 
+t_stat, p_value = ttest_1samp(metrics["auc"], 0.5)
+print(f"\nT-statistic (AUC vs 0.5): {t_stat:.4f}")
+print(f"P-value: {p_value:.4f}")
+
 # Holdout evaluation
 models = [GCNGraphClassifier(768, 256, 2).to(device) for _ in range(12)]
 for i, model in enumerate(models):
@@ -181,10 +218,11 @@ for i in range(len(X_hosp)):
     probs_list = []
     for layer_idx in range(12):
         adj = attn_list_h[i][layer_idx]
-        edge_index = (adj >= torch.quantile(adj, 0.9)).nonzero(as_tuple=False).t().contiguous()
+        edge_index = adj
         data = Data(x=features_list_h[i], edge_index=edge_index).to(device)
         with torch.no_grad():
-            prob = F.softmax(models[layer_idx](data.x, data.edge_index).mean(dim=0), dim=0)
+            out, _ = models[layer_idx](batch.x, batch.edge_index, batch.batch)
+            prob = F.softmax(out.mean(dim=0), dim=0)
             probs_list.append(prob.cpu())
     probs_tensor = torch.stack(probs_list)
     probs_avg = probs_tensor.mean(dim=0)

@@ -6,13 +6,13 @@ import torch.optim as optim
 import torch.nn.functional as F
 from sklearn.model_selection import StratifiedGroupKFold
 from torch.utils.data import DataLoader, Dataset
-from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score
+from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_score, roc_curve, auc
 from torchvision import models, transforms
 from PIL import Image
 import matplotlib.pyplot as plt
 
 # Carrega les dades
-data = np.load('/fhome/pmarti/TFGPau/tissueDades.npz', allow_pickle=True)
+data = np.load('/fhome/pmarti/TFGPau/LargetissueDades_48_Norm.npz', allow_pickle=True)
 X_no_hosp = data['X_no_hosp']
 y_no_hosp = data['y_no_hosp']
 PatID_no_hosp = data['PatID_no_hosp']
@@ -73,16 +73,12 @@ class Classifier(nn.Module):
         return self.net(x)
 
 # === 4. Peses de classe
-classCount = torch.bincount(torch.tensor(y_no_hosp))
-classWeights = 1.0 / classCount.float()
-classWeights = classWeights / classWeights.sum()
-classWeights = classWeights.to(device)
 
 # === 5. Funció d'entrenament
-def train_model(train_loader, val_loader, epochs=25):
+def train_model(train_loader, val_loader, epochs=7):
     model = Classifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.CrossEntropyLoss(weight=classWeights)
+    criterion = nn.CrossEntropyLoss()
     best_auc = -np.inf
     best_model = None
     epoch_losses = []
@@ -139,26 +135,37 @@ def train_model(train_loader, val_loader, epochs=25):
     metrics["f1_0"].append(f1_score(val_true, val_preds, pos_label=0))
     metrics["f1_1"].append(f1_score(val_true, val_preds, pos_label=1))
     metrics["auc"].append(roc_auc_score(val_true, val_scores))
+    metrics["y_true"].append(val_true)
+    metrics["y_pred"].append(val_preds)
+    metrics['y_scores'].append(val_scores)
 
-    return model, best_auc, epoch_losses
+    return model, best_auc, epoch_losses, val_true, val_scores
+
 
 # === 6. KFold + Entrenament
 n_splits = 5
-skf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42)
+skf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=2)
 
 best_models = []
 fold_auc_scores = []
 all_loss = []
-metrics = {"recall_0": [], "recall_1": [], "precision_0": [], "precision_1": [], "f1_0": [], "f1_1": [], "auc": []}
+metrics = {"recall_0": [], "recall_1": [], "precision_0": [], "precision_1": [], "f1_0": [], "f1_1": [], "auc": [], "y_true" : [], "y_pred" : [], 'y_scores' : []}
+roc_folds = []  # per guardar (fpr, tpr, auc)
 
 for fold, (train_idx, val_idx) in enumerate(skf.split(X_no_hosp, y_no_hosp, groups=PatID_no_hosp)):
     print(f"\n=== Fold {fold + 1} ===")
     train_dataset = ResNetEmbeddingDataset([X_no_hosp[i] for i in train_idx], y_no_hosp[train_idx])
     val_dataset = ResNetEmbeddingDataset([X_no_hosp[i] for i in val_idx], y_no_hosp[val_idx])
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
-    model, best_auc, losses = train_model(train_loader, val_loader)
+    model, best_auc, losses, val_true, val_scores = train_model(train_loader, val_loader)
+
+    fpr, tpr, _ = roc_curve(val_true, val_scores)
+    roc_auc = auc(fpr, tpr)
+    roc_folds.append((fpr, tpr, roc_auc))
+
+
     best_models.append(model)
     fold_auc_scores.append(best_auc)
     all_loss.append(losses)
@@ -174,40 +181,74 @@ plt.legend()
 plt.grid(True)
 plt.tight_layout()
 plt.savefig('/fhome/pmarti/TFGPau/DenseNet_MLP_Loss.png', dpi=300)
-plt.close()
+plt.close() 
 
-# Mostrar mètriques mitjanes i desviacions
-print("\n--- Validation Metrics per Fold ---")
-for key in metrics:
-    mean = np.mean(metrics[key])
-    std = np.std(metrics[key])
-    print(f"{key}: {mean:.4f} ± {std:.4f}")
+# plt.figure(figsize=(10, 6))
+# for i, (fpr, tpr, roc_auc) in enumerate(roc_folds):
+#     plt.plot(fpr, tpr, label=f"Fold {i+1} (AUC = {roc_auc:.2f})")
+# plt.plot([0, 1], [0, 1], 'k--', label="Random")
+# plt.title("ROC Curves per Fold")
+# plt.xlabel("False Positive Rate")
+# plt.ylabel("True Positive Rate")
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
+# plt.savefig('/fhome/pmarti/TFGPau/RocCurves/DenseNet_MLP_ROC_PerFold.png', dpi=300)
+# plt.close()
 
-# === 7. Test amb holdout
-best_fold_idx = np.argmax(fold_auc_scores)
-best_model = best_models[best_fold_idx]
-print(f"\nMillor model: Fold {best_fold_idx+1} amb AUC = {fold_auc_scores[best_fold_idx]:.4f}")
 
-test_dataset = ResNetEmbeddingDataset(X_hosp, y_hosp)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+# # Mostrar mètriques mitjanes i desviacions
+# print("\n--- Validation Metrics per Fold ---")
+# for key in metrics:
+#     mean = np.mean(metrics[key])
+#     std = np.std(metrics[key])
+#     print(f"{key}: {mean:.4f} ± {std:.4f}")
 
-best_model.eval()
-test_preds, test_true, test_scores = [], [], []
-with torch.no_grad():
-    for embeddings, labels in test_loader:
-        embeddings, labels = embeddings.to(device), labels.to(device)
-        outputs = best_model(embeddings)
-        probs = F.softmax(outputs, dim=1)[:, 1]
-        test_preds.extend(torch.argmax(outputs, dim=1).cpu().numpy())
-        test_true.extend(labels.cpu().numpy())
-        test_scores.extend(probs.cpu().numpy())
+np.savez("/fhome/pmarti/TFGPau/NPZs/DenseNet.npz", 
+    metrics=np.array(metrics, dtype=object),
+    val_loss_per_fold=np.array(all_loss, dtype=object),
+    roc_data_per_fold=np.array(roc_folds, dtype=object), allow_pickle=True)
 
-# Resultats
-print(f'\nHoldout Results:')
-print(f"AUC: {roc_auc_score(test_true, test_scores):.4f}")
-print(f"Recall (benigne): {recall_score(test_true, test_preds, pos_label=0):.4f}")
-print(f"Recall (maligne): {recall_score(test_true, test_preds, pos_label=1):.4f}")
-print(f"Precision (benigne): {precision_score(test_true, test_preds, pos_label=0):.4f}")
-print(f"Precision (maligne): {precision_score(test_true, test_preds, pos_label=1):.4f}")
-print(f"F1-score (benigne): {f1_score(test_true, test_preds, pos_label=0):.4f}")
-print(f"F1-score (maligne): {f1_score(test_true, test_preds, pos_label=1):.4f}")
+# # === 7. Test amb holdout
+# best_fold_idx = np.argmax(fold_auc_scores)
+# best_model = best_models[best_fold_idx]
+# print(f"\nMillor model: Fold {best_fold_idx+1} amb AUC = {fold_auc_scores[best_fold_idx]:.4f}")
+
+# test_dataset = ResNetEmbeddingDataset(X_hosp, y_hosp)
+# test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+# best_model.eval()
+# test_preds, test_true, test_scores = [], [], []
+# with torch.no_grad():
+#     for embeddings, labels in test_loader:
+#         embeddings, labels = embeddings.to(device), labels.to(device)
+#         outputs = best_model(embeddings)
+#         probs = F.softmax(outputs, dim=1)[:, 1]
+#         test_preds.extend(torch.argmax(outputs, dim=1).cpu().numpy())
+#         test_true.extend(labels.cpu().numpy())
+#         test_scores.extend(probs.cpu().numpy())
+
+# # Resultats
+# print(f'\nHoldout Results:')
+# print(f"AUC: {roc_auc_score(test_true, test_scores):.4f}")
+# print(f"Recall (benigne): {recall_score(test_true, test_preds, pos_label=0):.4f}")
+# print(f"Recall (maligne): {recall_score(test_true, test_preds, pos_label=1):.4f}")
+# print(f"Precision (benigne): {precision_score(test_true, test_preds, pos_label=0):.4f}")
+# print(f"Precision (maligne): {precision_score(test_true, test_preds, pos_label=1):.4f}")
+# print(f"F1-score (benigne): {f1_score(test_true, test_preds, pos_label=0):.4f}")
+# print(f"F1-score (maligne): {f1_score(test_true, test_preds, pos_label=1):.4f}")
+
+# fpr_test, tpr_test, _ = roc_curve(test_true, test_scores)
+# roc_auc_test = auc(fpr_test, tpr_test)
+
+# plt.figure(figsize=(8, 6))
+# plt.plot(fpr_test, tpr_test, label=f"Holdout ROC (AUC = {roc_auc_test:.2f})", color="darkorange")
+# plt.plot([0, 1], [0, 1], 'k--', label='Random')
+# plt.title("ROC Curve - Holdout Set")
+# plt.xlabel("False Positive Rate")
+# plt.ylabel("True Positive Rate")
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
+# plt.savefig("/fhome/pmarti/TFGPau/RocCurves/DenseNet_ROC_Holdout.png", dpi=300)
+# plt.close()
