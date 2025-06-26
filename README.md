@@ -1,46 +1,46 @@
 # Descripció fitxers:
 
-A tots els entrenos que fan ús de Graph Neural Networks he fet servir features i edge attributes:
+A tots els entrenos que fan ús de Graph Neural Networks he fet servir features i edge attributes
+
+Tots els resultats son a 5 folds i 6 epochs
 
 RocCurves: Imatges de totes les corbes ROC resultants d'entrenar els models.
 
-Images: Graelles de loss de tots els entrenos que he anat fent
+Images: Graelles de loss dels entrenos que s'han anat fent
 
-Execucions: Fitxers finals de les arquitectures basades en graf.
+(Desestimat) Attention_triplets: Triplets on es mostra la imatge original, on posa l’atenció el ViT i on posa l’atenció el GAT.
 
-NousCodis: Penúltims codis que es van fer servir per provar arquitectures.
+DenseNet.py: KFold i Holdout de una Densenet
 
-Tradicionals: Fitxers finals de les arquitectures no basades en grafs.
+EnsembleGAT.py: Extreure les 12 matrius d’atenció del ViT, entrenar un GAT amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
 
-Attention_triplets: Triplets on es mostra la imatge original, on posa l’atenció el ViT i on posa l’atenció el GAT.
+EnsembleGCN.py: Extreure les 12 matrius d’atenció del ViT, entrenar un GCN amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
 
-DenseNet.py (DenseNet 25 epochs): KFold i Holdout de una Densenet
+GATAGG.py: Agafar les 12 matrius d’atenció del ViT, passar-les a una capa d’agregació i fer-les servir per entrenar el model GAT.
 
-EnsembleGAT.py (ViT + GAT (Ensemble) 25 epochs): Extreure les 12 matrius d’atenció del ViT, entrenar un GAT amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
+GCNAgg.py: Agafar les 12 matrius d’atenció del ViT, passar-les a una capa d’agregació i fer-les servir per entrenar el model GCN.
 
-EnsembleGCN.py (ViT + GCN (Ensemble) 25 epochs): Extreure les 12 matrius d’atenció del ViT, entrenar un GCN amb cada una d’aquestes matrius i fer MaxVoting en el Holdout.
+ViTGATMitjana.py: Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GAT.
 
-GATAGG.py (ViT + GAT (Agregació) 25 epochs): Agafar les 12 matrius d’atenció del ViT, passar-les a una capa d’agregació i fer-les servir per entrenar el model GAT.
+ResNet.py: KFold i Holdout de una Resnet.
 
-GCNAgg.py (ViT + GCN (Agregació) 25 epochs): Agafar les 12 matrius d’atenció del ViT, passar-les a una capa d’agregació i fer-les servir per entrenar el model GCN.
+ViT+CNNLinear.py: Extreure el CLS del ViT, i fer-lo servir  per entrenar una capa Linear.
 
-MatAdj+Features.py (ViT + GAT (Mitjana) 25 epochs): Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GAT.
+ViT+CNNArch.py: Extreure el CLS del ViT, i fer-lo servir  per entrenar una NN amb una petita arquitectura.
 
-ResNet.py (ResNet 25 epochs): KFold i Holdout de una Resnet.
+ViTGCNMitjana.py: Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GCN.
 
-ViT+CNN (Lineal).py (ViT + CNN (Linear) 25 epochs): Agafar el vector de característiques del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar una capa Linear.
+ViTKFold.py: KFold i Holdout de un ViT tal cual el dona la llibreria.
 
-ViT+CNNArc.py (ViT + CNN (Arquitectura) 25 epochs): Agafar el vector de característiques del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar la arquitectura CNN que em vas passar per mail.
+ViTPreentrenat.py: KFold i Holdout de un ViT amb els pesos d’un ViT suposadament entrenat en histopatologia.
 
-ViT+GCN.py (ViT + GCN (Binarització) 25 epochs i ViT + GCN (No Binarització) 25 epochs): Agafar les 12 matrius d’atenció del ViT, fer-ne la mitjana i fer servir la matriu resultant de la mitjana per entrenar un model GCN.
+(Desestimat) heatmaps.py: Procés de creació dels mapes de calor per visualitzar la atenció de cada model.
 
-ViTKFold.py (ViT 25 epochs): KFold i Holdout de un ViT tal cual el dona la llibreria.
+CNN.py: Entreno validació i holdout utilitzant una cnn amb 3 capes de convolució.
 
-ViTPreentrenat.py (ViT Preentrenat 25 epochs): KFold i Holdout de un ViT amb els pesos d’un ViT suposadament entrenat en histopatologia.
+ExtreuNPZ.py: Extreure els patches de les imatges i guardar-los en un .npz per no tindre que repetir el procés cada cop que entrenem un model.
 
-heatmaps.py: Procés de creació dels mapes de calor per visualitzar la atenció de cada model.
-
-CNN.py (CNN 3 Conv2d 50 epochs): Entreno validació i holdout utilitzant una cnn amb 3 capes de convolució.
+ProcessImages.py: Dels patches, extreure les matrius del ViT segons la manera en la que volem agregar les matrius i guardar-les en un .npz per accelerar el procés.
 
 # Resultats:
 | Arq/Mètrica       | AUC               | RecB              | RecM              | PrecB             | PrecM             | F1-B              | F1-M              |
