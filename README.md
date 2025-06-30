@@ -6,9 +6,9 @@ Tots els resultats son a 5 folds i 6 epochs
 
 RocCurves: Imatges de totes les corbes ROC resultants d'entrenar els models.
 
-Images: Graelles de loss dels entrenos que s'han anat fent
+Images: Imatges de loss dels entrenos que s'han anat fent
 
-(Desestimat) Attention_triplets: Triplets on es mostra la imatge original, on posa l’atenció el ViT i on posa l’atenció el GAT.
+(Desestimat) Attention_triplets: Triplets (graella amb 3 imatges) on es mostra la imatge original, on posa l’atenció el ViT i on posa l’atenció el GAT.
 
 DenseNet.py: KFold i Holdout de una Densenet
 
@@ -41,6 +41,8 @@ CNN.py: Entreno validació i holdout utilitzant una cnn amb 3 capes de convoluci
 ExtreuNPZ.py: Extreure els patches de les imatges i guardar-los en un .npz per no tindre que repetir el procés cada cop que entrenem un model.
 
 ProcessImages.py: Dels patches, extreure les matrius del ViT segons la manera en la que volem agregar les matrius i guardar-les en un .npz per accelerar el procés.
+
+S'han desestimat els heatmaps d'atenció degut a la complexitat de la tasca, els triplets no son correctes.
 
 # Resultats:
 | Arq/Mètrica       | AUC               | RecB              | RecM              | PrecB             | PrecM             | F1-B              | F1-M              |
